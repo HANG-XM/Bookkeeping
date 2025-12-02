@@ -249,6 +249,68 @@ class AddLedgerDialog(QDialog):
             'description': self.description_edit.toPlainText()
         }
 
+class CategoryButton(QPushButton):
+    def __init__(self, text, category_type="normal"):
+        super().__init__(text)
+        self.category_type = category_type
+        self.is_selected = False
+        self.setup_style()
+    
+    def setup_style(self):
+        if self.category_type == "income":
+            self.setStyleSheet("""
+                QPushButton {
+                    border: 2px solid #4CAF50;
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    background-color: white;
+                    color: #333;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-height: 30px;
+                }
+                QPushButton:hover {
+                    background-color: #E8F5E8;
+                    border-color: #45a049;
+                }
+                QPushButton:selected {
+                    background-color: #4CAF50;
+                    color: white;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QPushButton {
+                    border: 2px solid #FF6B6B;
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    background-color: white;
+                    color: #333;
+                    font-size: 12px;
+                    font-weight: bold;
+                    min-height: 30px;
+                }
+                QPushButton:hover {
+                    background-color: #FFE0E0;
+                    border-color: #FF5252;
+                }
+                QPushButton:selected {
+                    background-color: #FF6B6B;
+                    color: white;
+                }
+            """)
+    
+    def set_selected(self, selected):
+        self.is_selected = selected
+        if selected:
+            self.setProperty("selected", True)
+            self.style().unpolish(self)
+            self.style().polish(self)
+        else:
+            self.setProperty("selected", False)
+            self.style().unpolish(self)
+            self.style().polish(self)
+
 class AddTransactionDialog(QDialog):
     def __init__(self, db_manager, ledger_id, parent=None):
         super().__init__(parent)
@@ -256,22 +318,22 @@ class AddTransactionDialog(QDialog):
         self.ledger_id = ledger_id
         self.setWindowTitle("添加交易记录")
         self.setModal(True)
+        self.selected_category = None
+        self.selected_subcategory = None
         self.setup_ui()
         self.load_categories()
     
     def setup_ui(self):
         layout = QVBoxLayout()
-        form_layout = QFormLayout()
+        
+        # 基本信息区域
+        basic_info_group = QGroupBox("基本信息")
+        basic_layout = QFormLayout()
         
         # 交易时间
         self.date_edit = QDateTimeEdit()
         self.date_edit.setDateTime(QDateTime.currentDateTime())
         self.date_edit.setDisplayFormat("yyyy-MM-dd")
-        
-        # 类别选择
-        self.category_combo = QComboBox()
-        self.subcategory_combo = QComboBox()
-        self.category_combo.currentTextChanged.connect(self.on_category_changed)
         
         # 金额
         self.amount_spin = QDoubleSpinBox()
@@ -282,6 +344,54 @@ class AddTransactionDialog(QDialog):
         # 账户
         self.account_combo = QComboBox()
         self.load_accounts()
+        
+        basic_layout.addRow("交易时间:", self.date_edit)
+        basic_layout.addRow("金额:", self.amount_spin)
+        basic_layout.addRow("账户:", self.account_combo)
+        
+        basic_info_group.setLayout(basic_layout)
+        layout.addWidget(basic_info_group)
+        
+        # 类别选择区域
+        category_group = QGroupBox("类别选择")
+        category_layout = QVBoxLayout()
+        
+        # 主类别卡片区域
+        main_category_label = QLabel("主类别:")
+        main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        category_layout.addWidget(main_category_label)
+        
+        self.main_category_scroll = QWidget()
+        self.main_category_layout = QVBoxLayout()
+        self.main_category_widget = QWidget()
+        self.main_category_buttons_layout = QVBoxLayout()
+        self.main_category_widget.setLayout(self.main_category_buttons_layout)
+        
+        scroll = QVBoxLayout()
+        scroll.addWidget(self.main_category_widget)
+        self.main_category_scroll.setLayout(scroll)
+        
+        category_layout.addWidget(self.main_category_scroll)
+        
+        # 子类别卡片区域
+        self.subcategory_label = QLabel("子类别:")
+        self.subcategory_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.subcategory_label.setVisible(False)
+        category_layout.addWidget(self.subcategory_label)
+        
+        self.subcategory_widget = QWidget()
+        self.subcategory_buttons_layout = QVBoxLayout()
+        self.subcategory_widget.setLayout(self.subcategory_buttons_layout)
+        self.subcategory_widget.setVisible(False)
+        
+        category_layout.addWidget(self.subcategory_widget)
+        
+        category_group.setLayout(category_layout)
+        layout.addWidget(category_group)
+        
+        # 其他信息区域
+        other_info_group = QGroupBox("其他信息")
+        other_layout = QFormLayout()
         
         # 备注
         self.description_edit = QLineEdit()
@@ -296,16 +406,15 @@ class AddTransactionDialog(QDialog):
         self.refund_amount_spin.setPrefix("¥")
         self.refund_reason_edit = QLineEdit()
         
-        form_layout.addRow("交易时间:", self.date_edit)
-        form_layout.addRow("主类别:", self.category_combo)
-        form_layout.addRow("子类别:", self.subcategory_combo)
-        form_layout.addRow("金额:", self.amount_spin)
-        form_layout.addRow("账户:", self.account_combo)
-        form_layout.addRow("备注:", self.description_edit)
-        form_layout.addRow("", self.settled_check)
-        form_layout.addRow("退款金额:", self.refund_amount_spin)
-        form_layout.addRow("退款原因:", self.refund_reason_edit)
+        other_layout.addRow("备注:", self.description_edit)
+        other_layout.addRow("", self.settled_check)
+        other_layout.addRow("退款金额:", self.refund_amount_spin)
+        other_layout.addRow("退款原因:", self.refund_reason_edit)
         
+        other_info_group.setLayout(other_layout)
+        layout.addWidget(other_info_group)
+        
+        # 按钮
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
         cancel_button = QPushButton("取消")
@@ -314,18 +423,48 @@ class AddTransactionDialog(QDialog):
         button_layout.addWidget(ok_button)
         button_layout.addWidget(cancel_button)
         
-        layout.addLayout(form_layout)
         layout.addLayout(button_layout)
         self.setLayout(layout)
     
     def load_categories(self):
         categories = self.db_manager.get_categories()
-        current_category = None
+        
+        # 按类型分组
+        expense_categories = {}
+        income_categories = {}
+        
         for parent, sub in categories:
-            if current_category != parent:
-                self.category_combo.addItem(parent)
-                current_category = parent
-        self.on_category_changed()
+            # 获取类别类型
+            conn = sqlite3.connect(self.db_manager.db_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT type FROM categories WHERE parent_category = ? AND sub_category = ? LIMIT 1', 
+                         (parent, sub))
+            result = cursor.fetchone()
+            category_type = result[0] if result else "支出"
+            conn.close()
+            
+            if category_type == "支出":
+                if parent not in expense_categories:
+                    expense_categories[parent] = []
+                expense_categories[parent].append(sub)
+            else:
+                if parent not in income_categories:
+                    income_categories[parent] = []
+                income_categories[parent].append(sub)
+        
+        # 创建主类别按钮
+        for category in expense_categories.keys():
+            btn = CategoryButton(category, "expense")
+            btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
+            self.main_category_buttons_layout.addWidget(btn)
+        
+        for category in income_categories.keys():
+            btn = CategoryButton(category, "income")
+            btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
+            self.main_category_buttons_layout.addWidget(btn)
+        
+        # 存储子类别数据
+        self.subcategories = {**expense_categories, **income_categories}
     
     def load_accounts(self):
         accounts = self.db_manager.get_accounts()
@@ -333,19 +472,58 @@ class AddTransactionDialog(QDialog):
         for account in accounts:
             self.account_combo.addItem(account[1])
     
-    def on_category_changed(self):
-        self.subcategory_combo.clear()
-        category = self.category_combo.currentText()
-        if category:
-            categories = self.db_manager.get_categories()
-            subcategories = [sub for parent, sub in categories if parent == category]
-            self.subcategory_combo.addItems(subcategories)
+    def on_main_category_clicked(self, category):
+        # 清除之前的选择
+        for i in range(self.main_category_buttons_layout.count()):
+            widget = self.main_category_buttons_layout.itemAt(i).widget()
+            if isinstance(widget, CategoryButton):
+                widget.set_selected(False)
+        
+        # 设置当前选择
+        sender = self.sender()
+        if isinstance(sender, CategoryButton):
+            sender.set_selected(True)
+            self.selected_category = category
+            
+            # 显示子类别
+            self.show_subcategories(category)
+    
+    def show_subcategories(self, category):
+        # 清除之前的子类别按钮
+        for i in reversed(range(self.subcategory_buttons_layout.count())):
+            child = self.subcategory_buttons_layout.itemAt(i).widget()
+            if child:
+                child.setParent(None)
+        
+        # 添加新的子类别按钮
+        if category in self.subcategories:
+            for subcategory in self.subcategories[category]:
+                btn = CategoryButton(subcategory, "normal")
+                btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
+                self.subcategory_buttons_layout.addWidget(btn)
+        
+        # 显示子类别区域
+        self.subcategory_label.setVisible(True)
+        self.subcategory_widget.setVisible(True)
+    
+    def on_subcategory_clicked(self, subcategory):
+        # 清除之前的选择
+        for i in range(self.subcategory_buttons_layout.count()):
+            widget = self.subcategory_buttons_layout.itemAt(i).widget()
+            if isinstance(widget, CategoryButton):
+                widget.set_selected(False)
+        
+        # 设置当前选择
+        sender = self.sender()
+        if isinstance(sender, CategoryButton):
+            sender.set_selected(True)
+            self.selected_subcategory = subcategory
     
     def get_data(self):
         return {
             'transaction_date': self.date_edit.date().toString("yyyy-MM-dd"),
-            'category': self.category_combo.currentText(),
-            'subcategory': self.subcategory_combo.currentText(),
+            'category': self.selected_category or "",
+            'subcategory': self.selected_subcategory or "",
             'amount': self.amount_spin.value(),
             'account': self.account_combo.currentText(),
             'description': self.description_edit.text(),
