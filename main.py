@@ -1,0 +1,555 @@
+import sys
+import sqlite3
+from datetime import datetime, date
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
+                            QWidget, QPushButton, QLabel, QLineEdit, QComboBox, 
+                            QTableWidget, QTableWidgetItem, QTabWidget, QDialog,
+                            QFormLayout, QTextEdit, QDateTimeEdit, QCheckBox,
+                            QDoubleSpinBox, QMessageBox, QSplitter, QGroupBox,
+                            QTreeWidget, QTreeWidgetItem, QHeaderView, QSpinBox)
+from PyQt6.QtCore import Qt, QDateTime
+from PyQt6.QtGui import QFont, QIcon
+
+class DatabaseManager:
+    def __init__(self, db_path="bookkeeping.db"):
+        self.db_path = db_path
+        self.init_database()
+    
+    def init_database(self):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 创建账本表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ledgers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                created_time TEXT NOT NULL,
+                ledger_type TEXT NOT NULL,
+                description TEXT
+            )
+        ''')
+        
+        # 创建收支类别表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                parent_category TEXT NOT NULL,
+                sub_category TEXT NOT NULL,
+                type TEXT NOT NULL,
+                UNIQUE(parent_category, sub_category)
+            )
+        ''')
+        
+        # 创建账户表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                type TEXT NOT NULL,
+                balance REAL DEFAULT 0.0
+            )
+        ''')
+        
+        # 创建交易记录表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ledger_id INTEGER NOT NULL,
+                transaction_date TEXT NOT NULL,
+                category TEXT NOT NULL,
+                subcategory TEXT NOT NULL,
+                amount REAL NOT NULL,
+                account TEXT,
+                description TEXT,
+                is_settled BOOLEAN DEFAULT FALSE,
+                refund_amount REAL DEFAULT 0.0,
+                refund_reason TEXT,
+                created_time TEXT NOT NULL,
+                FOREIGN KEY (ledger_id) REFERENCES ledgers (id)
+            )
+        ''')
+        
+        # 插入默认类别数据
+        self.insert_default_categories()
+        conn.commit()
+        conn.close()
+    
+    def insert_default_categories(self):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 支出类别
+        expense_categories = [
+            ("餐饮", ["零食", "外卖", "食堂", "堂食", "水果", "饮料", "聚餐"]),
+            ("休闲娱乐", ["电影", "游戏", "体育", "音乐", "旅游", "美妆", "宠物", "按摩", "健身", "会员"]),
+            ("生活缴费", ["水电费", "物业费", "燃气费", "网费", "话费", "房贷", "房租", "取暖费", "车位费"]),
+            ("交通", ["公交", "地铁", "共享单车", "共享电动车", "火车", "高铁", "飞机", "打车"]),
+            ("教育", ["考试费", "培训费", "资料费", "文具"]),
+            ("购物", ["服饰", "果蔬", "数码", "家电", "日用品", "家具"]),
+            ("汽车", ["充电/油", "保养", "维修", "过路费", "停车费"]),
+            ("医疗健康", ["药品", "住院", "体检", "保健品", "门诊", "疫苗接种"]),
+            ("社交人情", ["红包", "礼物", "请客", "捐赠", "团建费"]),
+            ("金融保险", ["保险", "投资", "贷款", "理财"]),
+            ("其他", ["快递费", "党费", "罚款", "借款", "手续费", "维修费", "班费"]),
+            ("儿童", ["母婴", "教育", "服装", "玩具", "医疗", "生活费"])
+        ]
+        
+        # 收入类别
+        income_categories = [
+            ("薪资", ["工作薪资", "副业收入", "奖金补贴"]),
+            ("生活费", ["家庭转账", "亲友资助"]),
+            ("理财", ["股票基金", "存款利息", "借贷回款", "房产租金"]),
+            ("人情往来", ["红包", "礼物"]),
+            ("其他", ["闲置变卖", "商家奖励", "赛事奖金", "奖学金", "版权费"])
+        ]
+        
+        for parent, subs in expense_categories:
+            for sub in subs:
+                cursor.execute('''
+                    INSERT OR IGNORE INTO categories (parent_category, sub_category, type)
+                    VALUES (?, ?, ?)
+                ''', (parent, sub, "支出"))
+        
+        for parent, subs in income_categories:
+            for sub in subs:
+                cursor.execute('''
+                    INSERT OR IGNORE INTO categories (parent_category, sub_category, type)
+                    VALUES (?, ?, ?)
+                ''', (parent, sub, "收入"))
+        
+        conn.commit()
+        conn.close()
+    
+    def add_ledger(self, name, ledger_type, description):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute('''
+            INSERT INTO ledgers (name, created_time, ledger_type, description)
+            VALUES (?, ?, ?, ?)
+        ''', (name, created_time, ledger_type, description))
+        conn.commit()
+        conn.close()
+    
+    def get_ledgers(self):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM ledgers ORDER BY created_time')
+        ledgers = cursor.fetchall()
+        conn.close()
+        return ledgers
+    
+    def delete_ledger(self, ledger_id):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM transactions WHERE ledger_id = ?', (ledger_id,))
+        cursor.execute('DELETE FROM ledgers WHERE id = ?', (ledger_id,))
+        conn.commit()
+        conn.close()
+    
+    def get_categories(self, category_type=None):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        if category_type:
+            cursor.execute('''
+                SELECT DISTINCT parent_category, sub_category FROM categories 
+                WHERE type = ? ORDER BY parent_category, sub_category
+            ''', (category_type,))
+        else:
+            cursor.execute('''
+                SELECT DISTINCT parent_category, sub_category FROM categories 
+                ORDER BY parent_category, sub_category
+            ''')
+        categories = cursor.fetchall()
+        conn.close()
+        return categories
+    
+    def add_transaction(self, ledger_id, transaction_date, category, subcategory, 
+                       amount, account, description, is_settled, refund_amount, refund_reason):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute('''
+            INSERT INTO transactions 
+            (ledger_id, transaction_date, category, subcategory, amount, account, 
+             description, is_settled, refund_amount, refund_reason, created_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (ledger_id, transaction_date, category, subcategory, amount, account,
+              description, is_settled, refund_amount, refund_reason, created_time))
+        conn.commit()
+        conn.close()
+    
+    def get_transactions(self, ledger_id):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM transactions WHERE ledger_id = ? 
+            ORDER BY transaction_date DESC, created_time DESC
+        ''', (ledger_id,))
+        transactions = cursor.fetchall()
+        conn.close()
+        return transactions
+    
+    def add_account(self, name, account_type, balance=0.0):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO accounts (name, type, balance)
+            VALUES (?, ?, ?)
+        ''', (name, account_type, balance))
+        conn.commit()
+        conn.close()
+    
+    def get_accounts(self):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM accounts ORDER BY name')
+        accounts = cursor.fetchall()
+        conn.close()
+        return accounts
+
+class AddLedgerDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("添加账本")
+        self.setModal(True)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+        
+        self.name_edit = QLineEdit()
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["个人", "家庭", "专项"])
+        self.description_edit = QTextEdit()
+        self.description_edit.setMaximumHeight(80)
+        
+        form_layout.addRow("账本名称:", self.name_edit)
+        form_layout.addRow("账本类型:", self.type_combo)
+        form_layout.addRow("备注:", self.description_edit)
+        
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(form_layout)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def get_data(self):
+        return {
+            'name': self.name_edit.text(),
+            'type': self.type_combo.currentText(),
+            'description': self.description_edit.toPlainText()
+        }
+
+class AddTransactionDialog(QDialog):
+    def __init__(self, db_manager, ledger_id, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.ledger_id = ledger_id
+        self.setWindowTitle("添加交易记录")
+        self.setModal(True)
+        self.setup_ui()
+        self.load_categories()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+        
+        # 交易时间
+        self.date_edit = QDateTimeEdit()
+        self.date_edit.setDateTime(QDateTime.currentDateTime())
+        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+        
+        # 类别选择
+        self.category_combo = QComboBox()
+        self.subcategory_combo = QComboBox()
+        self.category_combo.currentTextChanged.connect(self.on_category_changed)
+        
+        # 金额
+        self.amount_spin = QDoubleSpinBox()
+        self.amount_spin.setRange(-999999.99, 999999.99)
+        self.amount_spin.setDecimals(2)
+        self.amount_spin.setPrefix("¥")
+        
+        # 账户
+        self.account_combo = QComboBox()
+        self.load_accounts()
+        
+        # 备注
+        self.description_edit = QLineEdit()
+        
+        # 销账标记
+        self.settled_check = QCheckBox("已销账")
+        
+        # 退款信息
+        self.refund_amount_spin = QDoubleSpinBox()
+        self.refund_amount_spin.setRange(0, 999999.99)
+        self.refund_amount_spin.setDecimals(2)
+        self.refund_amount_spin.setPrefix("¥")
+        self.refund_reason_edit = QLineEdit()
+        
+        form_layout.addRow("交易时间:", self.date_edit)
+        form_layout.addRow("主类别:", self.category_combo)
+        form_layout.addRow("子类别:", self.subcategory_combo)
+        form_layout.addRow("金额:", self.amount_spin)
+        form_layout.addRow("账户:", self.account_combo)
+        form_layout.addRow("备注:", self.description_edit)
+        form_layout.addRow("", self.settled_check)
+        form_layout.addRow("退款金额:", self.refund_amount_spin)
+        form_layout.addRow("退款原因:", self.refund_reason_edit)
+        
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(form_layout)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def load_categories(self):
+        categories = self.db_manager.get_categories()
+        current_category = None
+        for parent, sub in categories:
+            if current_category != parent:
+                self.category_combo.addItem(parent)
+                current_category = parent
+        self.on_category_changed()
+    
+    def load_accounts(self):
+        accounts = self.db_manager.get_accounts()
+        self.account_combo.addItem("")
+        for account in accounts:
+            self.account_combo.addItem(account[1])
+    
+    def on_category_changed(self):
+        self.subcategory_combo.clear()
+        category = self.category_combo.currentText()
+        if category:
+            categories = self.db_manager.get_categories()
+            subcategories = [sub for parent, sub in categories if parent == category]
+            self.subcategory_combo.addItems(subcategories)
+    
+    def get_data(self):
+        return {
+            'transaction_date': self.date_edit.date().toString("yyyy-MM-dd"),
+            'category': self.category_combo.currentText(),
+            'subcategory': self.subcategory_combo.currentText(),
+            'amount': self.amount_spin.value(),
+            'account': self.account_combo.currentText(),
+            'description': self.description_edit.text(),
+            'is_settled': self.settled_check.isChecked(),
+            'refund_amount': self.refund_amount_spin.value(),
+            'refund_reason': self.refund_reason_edit.text()
+        }
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.db_manager = DatabaseManager()
+        self.current_ledger_id = None
+        self.ledgers = {}
+        self.setup_ui()
+        self.load_ledgers()
+        
+    def setup_ui(self):
+        self.setWindowTitle("多账本记账系统")
+        self.setGeometry(100, 100, 1200, 800)
+        
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # 主布局
+        main_layout = QHBoxLayout()
+        
+        # 左侧账本管理
+        left_widget = self.create_ledger_panel()
+        
+        # 右侧交易记录
+        right_widget = self.create_transaction_panel()
+        
+        # 分割器
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(left_widget)
+        splitter.addWidget(right_widget)
+        splitter.setSizes([300, 900])
+        
+        main_layout.addWidget(splitter)
+        central_widget.setLayout(main_layout)
+    
+    def create_ledger_panel(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # 账本管理标题
+        title_label = QLabel("账本管理")
+        title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        layout.addWidget(title_label)
+        
+        # 添加账本按钮
+        add_ledger_btn = QPushButton("添加账本")
+        add_ledger_btn.clicked.connect(self.add_ledger)
+        layout.addWidget(add_ledger_btn)
+        
+        # 账本列表
+        self.ledger_list = QTreeWidget()
+        self.ledger_list.setHeaderLabel("账本列表")
+        self.ledger_list.itemClicked.connect(self.on_ledger_selected)
+        layout.addWidget(self.ledger_list)
+        
+        # 账本操作按钮
+        ledger_btn_layout = QHBoxLayout()
+        delete_ledger_btn = QPushButton("删除账本")
+        delete_ledger_btn.clicked.connect(self.delete_ledger)
+        ledger_btn_layout.addWidget(delete_ledger_btn)
+        layout.addLayout(ledger_btn_layout)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def create_transaction_panel(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # 当前账本标题
+        self.current_ledger_label = QLabel("请选择账本")
+        self.current_ledger_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        layout.addWidget(self.current_ledger_label)
+        
+        # 交易操作按钮
+        transaction_btn_layout = QHBoxLayout()
+        add_transaction_btn = QPushButton("添加交易")
+        add_transaction_btn.clicked.connect(self.add_transaction)
+        transaction_btn_layout.addWidget(add_transaction_btn)
+        layout.addLayout(transaction_btn_layout)
+        
+        # 交易记录表格
+        self.transaction_table = QTableWidget()
+        self.transaction_table.setColumnCount(10)
+        self.transaction_table.setHorizontalHeaderLabels([
+            "日期", "主类别", "子类别", "金额", "账户", "备注", "销账", "退款金额", "退款原因", "创建时间"
+        ])
+        self.transaction_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        layout.addWidget(self.transaction_table)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def load_ledgers(self):
+        ledgers = self.db_manager.get_ledgers()
+        self.ledger_list.clear()
+        self.ledgers = {}
+        
+        for ledger in ledgers:
+            ledger_id, name, created_time, ledger_type, description = ledger
+            self.ledgers[ledger_id] = {
+                'name': name,
+                'type': ledger_type,
+                'description': description,
+                'created_time': created_time
+            }
+            
+            item = QTreeWidgetItem(self.ledger_list)
+            item.setText(0, f"{name} ({ledger_type})")
+            item.setData(0, Qt.ItemDataRole.UserRole, ledger_id)
+    
+    def on_ledger_selected(self, item, column):
+        ledger_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if ledger_id:
+            self.current_ledger_id = ledger_id
+            ledger_info = self.ledgers[ledger_id]
+            self.current_ledger_label.setText(f"当前账本: {ledger_info['name']} ({ledger_info['type']})")
+            self.load_transactions()
+    
+    def load_transactions(self):
+        if not self.current_ledger_id:
+            return
+        
+        transactions = self.db_manager.get_transactions(self.current_ledger_id)
+        self.transaction_table.setRowCount(len(transactions))
+        
+        for row, transaction in enumerate(transactions):
+            (trans_id, ledger_id, transaction_date, category, subcategory, 
+             amount, account, description, is_settled, refund_amount, 
+             refund_reason, created_time) = transaction
+            
+            self.transaction_table.setItem(row, 0, QTableWidgetItem(transaction_date))
+            self.transaction_table.setItem(row, 1, QTableWidgetItem(category))
+            self.transaction_table.setItem(row, 2, QTableWidgetItem(subcategory))
+            self.transaction_table.setItem(row, 3, QTableWidgetItem(f"¥{amount:.2f}"))
+            self.transaction_table.setItem(row, 4, QTableWidgetItem(account or ""))
+            self.transaction_table.setItem(row, 5, QTableWidgetItem(description or ""))
+            self.transaction_table.setItem(row, 6, QTableWidgetItem("是" if is_settled else "否"))
+            self.transaction_table.setItem(row, 7, QTableWidgetItem(f"¥{refund_amount:.2f}" if refund_amount > 0 else ""))
+            self.transaction_table.setItem(row, 8, QTableWidgetItem(refund_reason or ""))
+            self.transaction_table.setItem(row, 9, QTableWidgetItem(created_time))
+    
+    def add_ledger(self):
+        dialog = AddLedgerDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if data['name']:
+                self.db_manager.add_ledger(data['name'], data['type'], data['description'])
+                self.load_ledgers()
+                QMessageBox.information(self, "成功", "账本添加成功！")
+    
+    def delete_ledger(self):
+        current_item = self.ledger_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "警告", "请先选择要删除的账本！")
+            return
+        
+        ledger_id = current_item.data(0, Qt.ItemDataRole.UserRole)
+        ledger_name = self.ledgers[ledger_id]['name']
+        
+        reply = QMessageBox.question(self, "确认删除", 
+                                   f"确定要删除账本 '{ledger_name}' 吗？\n删除后将同时删除该账本下的所有交易记录！",
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.db_manager.delete_ledger(ledger_id)
+            self.load_ledgers()
+            if self.current_ledger_id == ledger_id:
+                self.current_ledger_id = None
+                self.current_ledger_label.setText("请选择账本")
+                self.transaction_table.setRowCount(0)
+            QMessageBox.information(self, "成功", "账本删除成功！")
+    
+    def add_transaction(self):
+        if not self.current_ledger_id:
+            QMessageBox.warning(self, "警告", "请先选择账本！")
+            return
+        
+        dialog = AddTransactionDialog(self.db_manager, self.current_ledger_id, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if data['category'] and data['subcategory'] and data['amount'] != 0:
+                self.db_manager.add_transaction(
+                    self.current_ledger_id, data['transaction_date'], data['category'],
+                    data['subcategory'], data['amount'], data['account'], data['description'],
+                    data['is_settled'], data['refund_amount'], data['refund_reason']
+                )
+                self.load_transactions()
+                QMessageBox.information(self, "成功", "交易记录添加成功！")
+            else:
+                QMessageBox.warning(self, "警告", "请填写必要的交易信息！")
+
+def main():
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()
