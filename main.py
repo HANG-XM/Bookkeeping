@@ -261,13 +261,16 @@ class CategoryButton(QPushButton):
             self.setStyleSheet("""
                 QPushButton {
                     border: 2px solid #4CAF50;
-                    border-radius: 8px;
-                    padding: 8px 12px;
+                    border-radius: 6px;
+                    padding: 6px 10px;
                     background-color: white;
                     color: #333;
-                    font-size: 12px;
+                    font-size: 11px;
                     font-weight: bold;
-                    min-height: 30px;
+                    min-height: 25px;
+                    max-height: 25px;
+                    min-width: 60px;
+                    max-width: 100px;
                 }
                 QPushButton:hover {
                     background-color: #E8F5E8;
@@ -282,13 +285,16 @@ class CategoryButton(QPushButton):
             self.setStyleSheet("""
                 QPushButton {
                     border: 2px solid #FF6B6B;
-                    border-radius: 8px;
-                    padding: 8px 12px;
+                    border-radius: 6px;
+                    padding: 6px 10px;
                     background-color: white;
                     color: #333;
-                    font-size: 12px;
+                    font-size: 11px;
                     font-weight: bold;
-                    min-height: 30px;
+                    min-height: 25px;
+                    max-height: 25px;
+                    min-width: 60px;
+                    max-width: 100px;
                 }
                 QPushButton:hover {
                     background-color: #FFE0E0;
@@ -361,17 +367,25 @@ class AddTransactionDialog(QDialog):
         main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         category_layout.addWidget(main_category_label)
         
-        self.main_category_scroll = QWidget()
-        self.main_category_layout = QVBoxLayout()
         self.main_category_widget = QWidget()
         self.main_category_buttons_layout = QVBoxLayout()
+        
+        # 创建滚动区域
+        from PyQt6.QtWidgets import QScrollArea
+        self.main_category_scroll = QScrollArea()
+        self.main_category_scroll.setWidgetResizable(True)
+        self.main_category_scroll.setMaximumHeight(120)
+        self.main_category_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.main_category_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.main_category_content = QWidget()
+        self.main_category_grid_layout = QVBoxLayout()
+        self.main_category_content.setLayout(self.main_category_grid_layout)
+        self.main_category_scroll.setWidget(self.main_category_content)
+        
+        self.main_category_buttons_layout.addWidget(self.main_category_scroll)
         self.main_category_widget.setLayout(self.main_category_buttons_layout)
-        
-        scroll = QVBoxLayout()
-        scroll.addWidget(self.main_category_widget)
-        self.main_category_scroll.setLayout(scroll)
-        
-        category_layout.addWidget(self.main_category_scroll)
+        category_layout.addWidget(self.main_category_widget)
         
         # 子类别卡片区域
         self.subcategory_label = QLabel("子类别:")
@@ -381,6 +395,20 @@ class AddTransactionDialog(QDialog):
         
         self.subcategory_widget = QWidget()
         self.subcategory_buttons_layout = QVBoxLayout()
+        
+        # 子类别滚动区域
+        self.subcategory_scroll = QScrollArea()
+        self.subcategory_scroll.setWidgetResizable(True)
+        self.subcategory_scroll.setMaximumHeight(100)
+        self.subcategory_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.subcategory_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.subcategory_content = QWidget()
+        self.subcategory_grid_layout = QVBoxLayout()
+        self.subcategory_content.setLayout(self.subcategory_grid_layout)
+        self.subcategory_scroll.setWidget(self.subcategory_content)
+        
+        self.subcategory_buttons_layout.addWidget(self.subcategory_scroll)
         self.subcategory_widget.setLayout(self.subcategory_buttons_layout)
         self.subcategory_widget.setVisible(False)
         
@@ -452,16 +480,38 @@ class AddTransactionDialog(QDialog):
                     income_categories[parent] = []
                 income_categories[parent].append(sub)
         
-        # 创建主类别按钮
-        for category in expense_categories.keys():
-            btn = CategoryButton(category, "expense")
-            btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
-            self.main_category_buttons_layout.addWidget(btn)
+        # 创建主类别按钮 - 使用网格布局
+        from PyQt6.QtWidgets import QGridLayout
+        
+        # 收入类别行
+        income_row_widget = QWidget()
+        income_row_layout = QHBoxLayout()
+        income_row_layout.setSpacing(5)
+        income_row_layout.setContentsMargins(0, 0, 0, 0)
         
         for category in income_categories.keys():
             btn = CategoryButton(category, "income")
             btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
-            self.main_category_buttons_layout.addWidget(btn)
+            income_row_layout.addWidget(btn)
+        
+        income_row_layout.addStretch()
+        income_row_widget.setLayout(income_row_layout)
+        self.main_category_grid_layout.addWidget(income_row_widget)
+        
+        # 支出类别行
+        expense_row_widget = QWidget()
+        expense_row_layout = QHBoxLayout()
+        expense_row_layout.setSpacing(5)
+        expense_row_layout.setContentsMargins(0, 0, 0, 0)
+        
+        for category in expense_categories.keys():
+            btn = CategoryButton(category, "expense")
+            btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
+            expense_row_layout.addWidget(btn)
+        
+        expense_row_layout.addStretch()
+        expense_row_widget.setLayout(expense_row_layout)
+        self.main_category_grid_layout.addWidget(expense_row_widget)
         
         # 存储子类别数据
         self.subcategories = {**expense_categories, **income_categories}
@@ -474,10 +524,13 @@ class AddTransactionDialog(QDialog):
     
     def on_main_category_clicked(self, category):
         # 清除之前的选择
-        for i in range(self.main_category_buttons_layout.count()):
-            widget = self.main_category_buttons_layout.itemAt(i).widget()
-            if isinstance(widget, CategoryButton):
-                widget.set_selected(False)
+        for i in range(self.main_category_grid_layout.count()):
+            row_widget = self.main_category_grid_layout.itemAt(i).widget()
+            if row_widget:
+                for j in range(row_widget.layout().count()):
+                    widget = row_widget.layout().itemAt(j).widget()
+                    if isinstance(widget, CategoryButton):
+                        widget.set_selected(False)
         
         # 设置当前选择
         sender = self.sender()
@@ -490,17 +543,26 @@ class AddTransactionDialog(QDialog):
     
     def show_subcategories(self, category):
         # 清除之前的子类别按钮
-        for i in reversed(range(self.subcategory_buttons_layout.count())):
-            child = self.subcategory_buttons_layout.itemAt(i).widget()
+        for i in reversed(range(self.subcategory_grid_layout.count())):
+            child = self.subcategory_grid_layout.itemAt(i).widget()
             if child:
                 child.setParent(None)
         
-        # 添加新的子类别按钮
+        # 添加新的子类别按钮 - 使用横向布局
         if category in self.subcategories:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(5)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            
             for subcategory in self.subcategories[category]:
                 btn = CategoryButton(subcategory, "normal")
                 btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
-                self.subcategory_buttons_layout.addWidget(btn)
+                row_layout.addWidget(btn)
+            
+            row_layout.addStretch()
+            row_widget.setLayout(row_layout)
+            self.subcategory_grid_layout.addWidget(row_widget)
         
         # 显示子类别区域
         self.subcategory_label.setVisible(True)
@@ -508,10 +570,13 @@ class AddTransactionDialog(QDialog):
     
     def on_subcategory_clicked(self, subcategory):
         # 清除之前的选择
-        for i in range(self.subcategory_buttons_layout.count()):
-            widget = self.subcategory_buttons_layout.itemAt(i).widget()
-            if isinstance(widget, CategoryButton):
-                widget.set_selected(False)
+        for i in range(self.subcategory_grid_layout.count()):
+            row_widget = self.subcategory_grid_layout.itemAt(i).widget()
+            if row_widget:
+                for j in range(row_widget.layout().count()):
+                    widget = row_widget.layout().itemAt(j).widget()
+                    if isinstance(widget, CategoryButton):
+                        widget.set_selected(False)
         
         # 设置当前选择
         sender = self.sender()
