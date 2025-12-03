@@ -2898,80 +2898,143 @@ class MainWindow(QMainWindow):
         """)
         basic_search_layout.addWidget(clear_btn)
         
+        # 高级筛选按钮
+        self.advanced_toggle_btn = QPushButton("🔧 高级筛选")
+        self.advanced_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        self.advanced_toggle_btn.clicked.connect(self.toggle_advanced_search)
+        basic_search_layout.addWidget(self.advanced_toggle_btn)
+        
         basic_search_layout.addStretch()
         search_layout.addLayout(basic_search_layout)
         
-        # 进阶搜索
-        advanced_search_layout = QGridLayout()
+        # 进阶搜索（默认隐藏）
+        self.advanced_search_widget = QWidget()
+        self.advanced_search_widget.setVisible(False)
+        advanced_search_layout = QVBoxLayout(self.advanced_search_widget)
         
-        # 类别搜索
-        advanced_search_layout.addWidget(QLabel("类别:"), 0, 0)
+        # 第一行：基础筛选
+        row1_layout = QHBoxLayout()
+        
+        # 基础筛选组（包含账户、类型、分类）
+        basic_filter_group = QGroupBox("基础筛选")
+        basic_filter_group.setMinimumWidth(400)  # 设置分组框最小宽度
+        basic_filter_layout = QHBoxLayout()
+        
+        # 账户筛选
+        basic_filter_layout.addWidget(QLabel("账户:"))
+        self.account_search_combo = QComboBox()
+        self.account_search_combo.setMinimumWidth(120)  # 设置组合框最小宽度
+        self.account_search_combo.addItem("")
+        basic_filter_layout.addWidget(self.account_search_combo)
+        
+        # 交易类型
+        basic_filter_layout.addWidget(QLabel("类型:"))
+        self.transaction_type_combo = QComboBox()
+        self.transaction_type_combo.setMinimumWidth(80)  # 设置组合框最小宽度
+        self.transaction_type_combo.addItems(["", "收入", "支出"])
+        basic_filter_layout.addWidget(self.transaction_type_combo)
+        
+        # 分类筛选
+        basic_filter_layout.addWidget(QLabel("分类:"))
         self.category_combo = QComboBox()
+        self.category_combo.setMinimumWidth(100)  # 设置组合框最小宽度
         self.category_combo.addItem("")
         self.category_combo.currentTextChanged.connect(self.on_category_changed)
-        advanced_search_layout.addWidget(self.category_combo, 0, 1)
+        basic_filter_layout.addWidget(self.category_combo)
         
         self.subcategory_combo = QComboBox()
+        self.subcategory_combo.setMinimumWidth(100)  # 设置组合框最小宽度
         self.subcategory_combo.addItem("")
-        advanced_search_layout.addWidget(self.subcategory_combo, 0, 2)
+        basic_filter_layout.addWidget(self.subcategory_combo)
         
-        # 账户搜索
-        advanced_search_layout.addWidget(QLabel("账户:"), 0, 3)
-        self.account_search_combo = QComboBox()
-        self.account_search_combo.addItem("")
-        advanced_search_layout.addWidget(self.account_search_combo, 0, 4)
+        basic_filter_group.setLayout(basic_filter_layout)
+        row1_layout.addWidget(basic_filter_group)
         
-        # 收支类型
-        advanced_search_layout.addWidget(QLabel("类型:"), 1, 0)
-        self.transaction_type_combo = QComboBox()
-        self.transaction_type_combo.addItems(["", "收入", "支出"])
-        advanced_search_layout.addWidget(self.transaction_type_combo, 1, 1)
-        
-        # 销账状态
-        advanced_search_layout.addWidget(QLabel("销账状态:"), 1, 2)
+        # 状态筛选组
+        status_group = QGroupBox("状态筛选")
+        status_group.setMinimumWidth(200)  # 设置分组框最小宽度
+        status_layout = QHBoxLayout()
+        status_layout.addWidget(QLabel("销账:"))
         self.settled_combo = QComboBox()
+        self.settled_combo.setMinimumWidth(80)  # 设置组合框最小宽度
         self.settled_combo.addItems(["", "已销账", "未销账"])
-        advanced_search_layout.addWidget(self.settled_combo, 1, 3)
+        status_layout.addWidget(self.settled_combo)
         
-        # 退款状态
-        advanced_search_layout.addWidget(QLabel("退款状态:"), 1, 4)
+        status_layout.addWidget(QLabel("退款:"))
         self.refund_combo = QComboBox()
+        self.refund_combo.setMinimumWidth(80)  # 设置组合框最小宽度
         self.refund_combo.addItems(["", "有退款", "无退款"])
-        advanced_search_layout.addWidget(self.refund_combo, 1, 5)
+        status_layout.addWidget(self.refund_combo)
+        status_group.setLayout(status_layout)
+        row1_layout.addWidget(status_group)
         
-        # 金额范围
-        advanced_search_layout.addWidget(QLabel("金额范围:"), 2, 0)
+        row1_layout.addStretch()
+        advanced_search_layout.addLayout(row1_layout)
+        
+        # 第三行：金额和时间范围
+        row3_layout = QHBoxLayout()
+        
+        # 金额范围组
+        amount_group = QGroupBox("金额范围")
+        amount_group.setMinimumWidth(250)  # 设置分组框最小宽度
+        amount_layout = QHBoxLayout()
         self.min_amount_spin = QDoubleSpinBox()
         self.min_amount_spin.setRange(0, 999999.99)
         self.min_amount_spin.setDecimals(2)
         self.min_amount_spin.setPrefix("¥")
         self.min_amount_spin.setSpecialValueText("最小")
         self.min_amount_spin.setValue(0)
-        advanced_search_layout.addWidget(self.min_amount_spin, 2, 1)
+        self.min_amount_spin.setMinimumWidth(100)  # 设置输入框最小宽度
+        amount_layout.addWidget(self.min_amount_spin)
         
-        advanced_search_layout.addWidget(QLabel("至"), 2, 2)
+        amount_layout.addWidget(QLabel("至"))
         self.max_amount_spin = QDoubleSpinBox()
         self.max_amount_spin.setRange(0, 999999.99)
         self.max_amount_spin.setDecimals(2)
         self.max_amount_spin.setPrefix("¥")
         self.max_amount_spin.setSpecialValueText("最大")
         self.max_amount_spin.setMaximum(999999.99)
-        advanced_search_layout.addWidget(self.max_amount_spin, 2, 3)
+        self.max_amount_spin.setMinimumWidth(100)  # 设置输入框最小宽度
+        amount_layout.addWidget(self.max_amount_spin)
+        amount_group.setLayout(amount_layout)
+        row3_layout.addWidget(amount_group)
         
-        # 时间范围
-        advanced_search_layout.addWidget(QLabel("时间范围:"), 2, 4)
+        # 时间范围组
+        date_group = QGroupBox("时间范围")
+        date_group.setMinimumWidth(300)  # 设置分组框最小宽度
+        date_layout = QHBoxLayout()
         self.start_date_edit = QDateEdit()
         self.start_date_edit.setCalendarPopup(True)
         self.start_date_edit.setDate(QDate.currentDate().addMonths(-1))
-        advanced_search_layout.addWidget(self.start_date_edit, 2, 5)
+        self.start_date_edit.setMinimumWidth(120)  # 设置日期选择器最小宽度
+        date_layout.addWidget(self.start_date_edit)
         
-        advanced_search_layout.addWidget(QLabel("至"), 2, 6)
+        date_layout.addWidget(QLabel("至"))
         self.end_date_edit = QDateEdit()
         self.end_date_edit.setCalendarPopup(True)
         self.end_date_edit.setDate(QDate.currentDate())
-        advanced_search_layout.addWidget(self.end_date_edit, 2, 7)
+        self.end_date_edit.setMinimumWidth(120)  # 设置日期选择器最小宽度
+        date_layout.addWidget(self.end_date_edit)
+        date_group.setLayout(date_layout)
+        row3_layout.addWidget(date_group)
         
-        search_layout.addLayout(advanced_search_layout)
+        row3_layout.addStretch()
+        advanced_search_layout.addLayout(row3_layout)
+        
+        search_layout.addWidget(self.advanced_search_widget)
         search_group.setLayout(search_layout)
         transaction_layout.addWidget(search_group)
         
@@ -3168,6 +3231,44 @@ class MainWindow(QMainWindow):
         total_count = len(all_transactions)
         if keyword or category or subcategory or account or transaction_type or settled_status or refund_status or min_amount > 0 or max_amount < 999999.99:
             QMessageBox.information(self, "搜索结果", f"找到 {result_count} 条记录，共 {total_count} 条记录")
+    
+    def toggle_advanced_search(self):
+        """切换高级搜索的显示/隐藏"""
+        is_visible = self.advanced_search_widget.isVisible()
+        self.advanced_search_widget.setVisible(not is_visible)
+        
+        if not is_visible:
+            self.advanced_toggle_btn.setText("🔧 收起筛选")
+            self.advanced_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #F44336;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }
+                QPushButton:hover {
+                    background-color: #D32F2F;
+                }
+            """)
+        else:
+            self.advanced_toggle_btn.setText("🔧 高级筛选")
+            self.advanced_toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #FF9800;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }
+                QPushButton:hover {
+                    background-color: #F57C00;
+                }
+            """)
     
     def clear_search(self):
         """清除搜索条件"""
