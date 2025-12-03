@@ -213,6 +213,22 @@ class DatabaseManager:
             INSERT INTO ledgers (name, created_time, ledger_type, description)
             VALUES (?, ?, ?, ?)
         ''', (name, created_time, ledger_type, description))
+        
+        # 获取新创建的账本ID
+        ledger_id = cursor.lastrowid
+        
+        # 自动创建默认账户
+        default_accounts = [
+            ("现金", "现金", "个人", 0.0, "现金余额"),
+            ("微信", "电子支付", "腾讯", 0.0, "微信支付")
+        ]
+        
+        for account_name, account_type, bank, balance, account_desc in default_accounts:
+            cursor.execute('''
+                INSERT INTO accounts (name, type, balance, bank, description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (account_name, account_type, balance, bank, account_desc))
+        
         conn.commit()
         conn.close()
     
@@ -276,6 +292,16 @@ class DatabaseManager:
         return transactions
     
     def add_account(self, name, account_type, balance=0.0, bank=None, description=None):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO accounts (name, type, balance, bank, description)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (name, account_type, balance, bank, description))
+        conn.commit()
+        conn.close()
+    
+    def add_account_without_ledger(self, name, account_type, balance=0.0, bank=None, description=None):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -666,6 +692,30 @@ class CategoryButton(QPushButton):
                 }
                 QPushButton:selected {
                     background-color: #4CAF50;
+                    color: white;
+                }
+            """)
+        elif self.category_type == "expense":
+            self.setStyleSheet("""
+                QPushButton {
+                    border: 2px solid #FF6B6B;
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    background-color: white;
+                    color: #333;
+                    font-size: 11px;
+                    font-weight: bold;
+                    min-height: 25px;
+                    max-height: 25px;
+                    min-width: 60px;
+                    max-width: 100px;
+                }
+                QPushButton:hover {
+                    background-color: #FFE0E0;
+                    border-color: #FF5252;
+                }
+                QPushButton:selected {
+                    background-color: #FF6B6B;
                     color: white;
                 }
             """)
@@ -1200,7 +1250,7 @@ class AddAccountDialog(QDialog):
         
         self.name_edit = QLineEdit()
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["现金", "银行卡", "支付宝", "微信", "其他"])
+        self.type_combo.addItems(["现金", "银行卡", "电子支付", "其他"])
         self.bank_edit = QLineEdit()
         self.balance_spin = QDoubleSpinBox()
         self.balance_spin.setRange(0, 999999.99)
@@ -1400,6 +1450,10 @@ class AssetManagementWidget(QWidget):
                     data['bank'], data['description']
                 )
                 self.load_accounts()
+                # 刷新统计页面
+                parent = self.parent()
+                if parent and hasattr(parent, 'statistics_widget'):
+                    parent.statistics_widget.update_statistics()
                 QMessageBox.information(self, "成功", "账户添加成功！")
     
     def add_transfer(self):
@@ -1423,6 +1477,10 @@ class AssetManagementWidget(QWidget):
                 )
                 self.load_accounts()
                 self.load_transfers()
+                # 刷新统计页面
+                parent = self.parent()
+                if parent and hasattr(parent, 'statistics_widget'):
+                    parent.statistics_widget.update_statistics()
                 QMessageBox.information(self, "成功", "转账记录添加成功！")
 
 class StatisticsWidget(QWidget):
