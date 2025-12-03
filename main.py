@@ -371,44 +371,77 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         if ledger_id:
+            # 获取收入总额和退款
             cursor.execute('''
                 SELECT 
-                    transaction_type,
-                    SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
-                    SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
-                    COUNT(*) as count
+                    SUM(CASE WHEN transaction_type = "收入" THEN amount ELSE 0 END) as gross_income,
+                    SUM(CASE WHEN transaction_type = "收入" THEN refund_amount ELSE 0 END) as total_refund
                 FROM transactions 
                 WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
-                GROUP BY transaction_type
             ''', (start_date, end_date, ledger_id))
-        else:
+            
+            income_result = cursor.fetchone()
+            gross_income = income_result[0] or 0.0
+            total_refund = income_result[1] or 0.0
+            
+            # 获取支出总额和退款报销
             cursor.execute('''
                 SELECT 
-                    transaction_type,
-                    SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
-                    SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
-                    COUNT(*) as count
+                    SUM(CASE WHEN transaction_type = "支出" THEN amount ELSE 0 END) as gross_expense,
+                    SUM(CASE WHEN transaction_type = "支出" THEN refund_amount ELSE 0 END) as expense_refund
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
+            ''', (start_date, end_date, ledger_id))
+            
+            expense_result = cursor.fetchone()
+            gross_expense = expense_result[0] or 0.0
+            expense_refund = expense_result[1] or 0.0
+        else:
+            # 获取收入总额和退款
+            cursor.execute('''
+                SELECT 
+                    SUM(CASE WHEN transaction_type = "收入" THEN amount ELSE 0 END) as gross_income,
+                    SUM(CASE WHEN transaction_type = "收入" THEN refund_amount ELSE 0 END) as total_refund
                 FROM transactions 
                 WHERE transaction_date BETWEEN ? AND ?
-                GROUP BY transaction_type
             ''', (start_date, end_date))
+            
+            income_result = cursor.fetchone()
+            gross_income = income_result[0] or 0.0
+            total_refund = income_result[1] or 0.0
+            
+            # 获取支出总额和退款报销
+            cursor.execute('''
+                SELECT 
+                    SUM(CASE WHEN transaction_type = "支出" THEN amount ELSE 0 END) as gross_expense,
+                    SUM(CASE WHEN transaction_type = "支出" THEN refund_amount ELSE 0 END) as expense_refund
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ?
+            ''', (start_date, end_date))
+            
+            expense_result = cursor.fetchone()
+            gross_expense = expense_result[0] or 0.0
+            expense_refund = expense_result[1] or 0.0
         
-        results = cursor.fetchall()
         conn.close()
         
-        total_income = 0.0
-        total_expense = 0.0
-        
-        for row in results:
-            if row[0] == "收入":
-                total_income = row[1]
-            elif row[0] == "支出":
-                total_expense = row[1]
+        # 实际收入 = 收入总额 - 退款总额
+        actual_income = gross_income - total_refund
+        # 实际支出 = 支出总额 - 退款报销总额
+        actual_expense = gross_expense - expense_refund
+        # 净收入 = 实际收入 - 实际支出
+        net_income = actual_income - actual_expense
         
         return {
-            'total_income': total_income,
-            'total_expense': total_expense,
-            'net_income': total_income - total_expense
+            'gross_income': gross_income,
+            'total_refund': total_refund,
+            'actual_income': actual_income,
+            'gross_expense': gross_expense,
+            'expense_refund': expense_refund,
+            'actual_expense': actual_expense,
+            'net_income': net_income,
+            'total_income': actual_income,  # 保持向后兼容
+            'total_expense': actual_expense  # 保持向后兼容
         }
     
     def get_category_statistics(self, start_date, end_date, transaction_type, level="parent", ledger_id=None):
@@ -1518,6 +1551,20 @@ class StatisticsWidget(QWidget):
         
         summary_cards_layout.addStretch()
         stats_layout.addLayout(summary_cards_layout)
+        
+        # 添加计算说明
+        calculation_note = QLabel("注：总收入=收入总额-退款总额；总支出=支出总额-报销总额；净收支=实际收入-实际支出")
+        calculation_note.setStyleSheet("""
+            QLabel {
+                color: #666;
+                font-size: 11px;
+                padding: 5px;
+                background-color: #f5f5f5;
+                border-radius: 3px;
+            }
+        """)
+        calculation_note.setWordWrap(True)
+        stats_layout.addWidget(calculation_note)
         
         # 收支结构和账户分布图表
         charts_layout = QHBoxLayout()
