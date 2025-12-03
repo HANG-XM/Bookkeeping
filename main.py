@@ -710,89 +710,125 @@ class CategoryButton(QPushButton):
         self.setup_style()
     
     def setup_style(self):
-        if self.category_type == "income":
-            self.setStyleSheet("""
-                QPushButton {
-                    border: 2px solid #4CAF50;
-                    border-radius: 6px;
-                    padding: 6px 10px;
-                    background-color: white;
-                    color: #333;
-                    font-size: 11px;
-                    font-weight: bold;
-                    min-height: 25px;
-                    max-height: 25px;
-                    min-width: 60px;
-                    max-width: 100px;
-                }
-                QPushButton:hover {
-                    background-color: #E8F5E8;
-                    border-color: #45a049;
-                }
-                QPushButton:selected {
-                    background-color: #4CAF50;
-                    color: white;
-                }
-            """)
-        elif self.category_type == "expense":
-            self.setStyleSheet("""
-                QPushButton {
-                    border: 2px solid #FF6B6B;
-                    border-radius: 6px;
-                    padding: 6px 10px;
-                    background-color: white;
-                    color: #333;
-                    font-size: 11px;
-                    font-weight: bold;
-                    min-height: 25px;
-                    max-height: 25px;
-                    min-width: 60px;
-                    max-width: 100px;
-                }
-                QPushButton:hover {
-                    background-color: #FFE0E0;
-                    border-color: #FF5252;
-                }
-                QPushButton:selected {
-                    background-color: #FF6B6B;
-                    color: white;
-                }
-            """)
+        self.update_style()
+    
+    def update_style(self):
+        if self.is_selected:
+            # 选中状态
+            if self.category_type == "income":
+                self.setStyleSheet("""
+                    QPushButton {
+                        border: 2px solid #4CAF50;
+                        border-radius: 6px;
+                        padding: 6px 10px;
+                        background-color: #4CAF50;
+                        color: white;
+                        font-size: 11px;
+                        font-weight: bold;
+                        min-height: 25px;
+                        max-height: 25px;
+                        min-width: 60px;
+                        max-width: 100px;
+                    }
+                """)
+            elif self.category_type == "expense":
+                self.setStyleSheet("""
+                    QPushButton {
+                        border: 2px solid #FF6B6B;
+                        border-radius: 6px;
+                        padding: 6px 10px;
+                        background-color: #FF6B6B;
+                        color: white;
+                        font-size: 11px;
+                        font-weight: bold;
+                        min-height: 25px;
+                        max-height: 25px;
+                        min-width: 60px;
+                        max-width: 100px;
+                    }
+                """)
+            else:
+                self.setStyleSheet("""
+                    QPushButton {
+                        border: 2px solid #FF6B6B;
+                        border-radius: 6px;
+                        padding: 6px 10px;
+                        background-color: #FF6B6B;
+                        color: white;
+                        font-size: 11px;
+                        font-weight: bold;
+                        min-height: 25px;
+                        max-height: 25px;
+                        min-width: 60px;
+                        max-width: 100px;
+                    }
+                """)
         else:
-            self.setStyleSheet("""
-                QPushButton {
-                    border: 2px solid #FF6B6B;
-                    border-radius: 6px;
-                    padding: 6px 10px;
-                    background-color: white;
-                    color: #333;
-                    font-size: 11px;
-                    font-weight: bold;
-                    min-height: 25px;
-                    max-height: 25px;
-                    min-width: 60px;
-                    max-width: 100px;
-                }
-                QPushButton:hover {
-                    background-color: #FFE0E0;
-                    border-color: #FF5252;
-                }
-                QPushButton:selected {
-                    background-color: #FF6B6B;
-                    color: white;
-                }
-            """)
+            # 未选中状态
+            if self.category_type == "income":
+                self.setStyleSheet("""
+                    QPushButton {
+                        border: 2px solid #4CAF50;
+                        border-radius: 6px;
+                        padding: 6px 10px;
+                        background-color: white;
+                        color: #333;
+                        font-size: 11px;
+                        font-weight: bold;
+                        min-height: 25px;
+                        max-height: 25px;
+                        min-width: 60px;
+                        max-width: 100px;
+                    }
+                    QPushButton:hover {
+                        background-color: #E8F5E8;
+                        border-color: #45a049;
+                    }
+                """)
+            elif self.category_type == "expense":
+                self.setStyleSheet("""
+                    QPushButton {
+                        border: 2px solid #FF6B6B;
+                        border-radius: 6px;
+                        padding: 6px 10px;
+                        background-color: white;
+                        color: #333;
+                        font-size: 11px;
+                        font-weight: bold;
+                        min-height: 25px;
+                        max-height: 25px;
+                        min-width: 60px;
+                        max-width: 100px;
+                    }
+                    QPushButton:hover {
+                        background-color: #FFE0E0;
+                        border-color: #FF5252;
+                    }
+                """)
+            else:
+                self.setStyleSheet("""
+                    QPushButton {
+                        border: 2px solid #FF6B6B;
+                        border-radius: 6px;
+                        padding: 6px 10px;
+                        background-color: white;
+                        color: #333;
+                        font-size: 11px;
+                        font-weight: bold;
+                        min-height: 25px;
+                        max-height: 25px;
+                        min-width: 60px;
+                        max-width: 100px;
+                    }
+                    QPushButton:hover {
+                        background-color: #FFE0E0;
+                        border-color: #FF5252;
+                    }
+                """)
     
     def set_selected(self, selected):
         self.is_selected = selected
-        if selected:
-            self.setProperty("selected", True)
-            self.style().unpolish(self)
-            self.style().polish(self)
-        else:
-            self.setProperty("selected", False)
-            self.style().unpolish(self)
-            self.style().polish(self)
+        self.update_style()
 
 class EditIncomeDialog(QDialog):
     def __init__(self, db_manager, transaction_data, parent=None):
