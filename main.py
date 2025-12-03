@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                             QFormLayout, QTextEdit, QDateTimeEdit, QCheckBox,
                             QDoubleSpinBox, QMessageBox, QSplitter, QGroupBox,
                             QTreeWidget, QTreeWidgetItem, QHeaderView, QSpinBox,
-                            QCalendarWidget, QDateEdit, QScrollArea)
+                            QCalendarWidget, QDateEdit, QScrollArea, QGridLayout)
 from PyQt6.QtCore import Qt, QDateTime, QDate
 from PyQt6.QtGui import QFont, QIcon
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -2851,6 +2851,130 @@ class MainWindow(QMainWindow):
         transaction_btn_layout.addStretch()
         transaction_layout.addLayout(transaction_btn_layout)
         
+        # 搜索区域
+        search_group = QGroupBox("搜索功能")
+        search_layout = QVBoxLayout()
+        
+        # 基础搜索
+        basic_search_layout = QHBoxLayout()
+        basic_search_layout.addWidget(QLabel("关键词搜索:"))
+        
+        self.keyword_search_edit = QLineEdit()
+        self.keyword_search_edit.setPlaceholderText("输入关键词搜索备注、类别、账户、退款原因...")
+        self.keyword_search_edit.returnPressed.connect(self.search_transactions)
+        basic_search_layout.addWidget(self.keyword_search_edit)
+        
+        search_btn = QPushButton("🔍 搜索")
+        search_btn.clicked.connect(self.search_transactions)
+        search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        basic_search_layout.addWidget(search_btn)
+        
+        clear_btn = QPushButton("清除")
+        clear_btn.clicked.connect(self.clear_search)
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9E9E9E;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #757575;
+            }
+        """)
+        basic_search_layout.addWidget(clear_btn)
+        
+        basic_search_layout.addStretch()
+        search_layout.addLayout(basic_search_layout)
+        
+        # 进阶搜索
+        advanced_search_layout = QGridLayout()
+        
+        # 类别搜索
+        advanced_search_layout.addWidget(QLabel("类别:"), 0, 0)
+        self.category_combo = QComboBox()
+        self.category_combo.addItem("")
+        self.category_combo.currentTextChanged.connect(self.on_category_changed)
+        advanced_search_layout.addWidget(self.category_combo, 0, 1)
+        
+        self.subcategory_combo = QComboBox()
+        self.subcategory_combo.addItem("")
+        advanced_search_layout.addWidget(self.subcategory_combo, 0, 2)
+        
+        # 账户搜索
+        advanced_search_layout.addWidget(QLabel("账户:"), 0, 3)
+        self.account_search_combo = QComboBox()
+        self.account_search_combo.addItem("")
+        advanced_search_layout.addWidget(self.account_search_combo, 0, 4)
+        
+        # 收支类型
+        advanced_search_layout.addWidget(QLabel("类型:"), 1, 0)
+        self.transaction_type_combo = QComboBox()
+        self.transaction_type_combo.addItems(["", "收入", "支出"])
+        advanced_search_layout.addWidget(self.transaction_type_combo, 1, 1)
+        
+        # 销账状态
+        advanced_search_layout.addWidget(QLabel("销账状态:"), 1, 2)
+        self.settled_combo = QComboBox()
+        self.settled_combo.addItems(["", "已销账", "未销账"])
+        advanced_search_layout.addWidget(self.settled_combo, 1, 3)
+        
+        # 退款状态
+        advanced_search_layout.addWidget(QLabel("退款状态:"), 1, 4)
+        self.refund_combo = QComboBox()
+        self.refund_combo.addItems(["", "有退款", "无退款"])
+        advanced_search_layout.addWidget(self.refund_combo, 1, 5)
+        
+        # 金额范围
+        advanced_search_layout.addWidget(QLabel("金额范围:"), 2, 0)
+        self.min_amount_spin = QDoubleSpinBox()
+        self.min_amount_spin.setRange(0, 999999.99)
+        self.min_amount_spin.setDecimals(2)
+        self.min_amount_spin.setPrefix("¥")
+        self.min_amount_spin.setSpecialValueText("最小")
+        self.min_amount_spin.setValue(0)
+        advanced_search_layout.addWidget(self.min_amount_spin, 2, 1)
+        
+        advanced_search_layout.addWidget(QLabel("至"), 2, 2)
+        self.max_amount_spin = QDoubleSpinBox()
+        self.max_amount_spin.setRange(0, 999999.99)
+        self.max_amount_spin.setDecimals(2)
+        self.max_amount_spin.setPrefix("¥")
+        self.max_amount_spin.setSpecialValueText("最大")
+        self.max_amount_spin.setMaximum(999999.99)
+        advanced_search_layout.addWidget(self.max_amount_spin, 2, 3)
+        
+        # 时间范围
+        advanced_search_layout.addWidget(QLabel("时间范围:"), 2, 4)
+        self.start_date_edit = QDateEdit()
+        self.start_date_edit.setCalendarPopup(True)
+        self.start_date_edit.setDate(QDate.currentDate().addMonths(-1))
+        advanced_search_layout.addWidget(self.start_date_edit, 2, 5)
+        
+        advanced_search_layout.addWidget(QLabel("至"), 2, 6)
+        self.end_date_edit = QDateEdit()
+        self.end_date_edit.setCalendarPopup(True)
+        self.end_date_edit.setDate(QDate.currentDate())
+        advanced_search_layout.addWidget(self.end_date_edit, 2, 7)
+        
+        search_layout.addLayout(advanced_search_layout)
+        search_group.setLayout(search_layout)
+        transaction_layout.addWidget(search_group)
+        
         # 交易记录表格
         self.transaction_table = QTableWidget()
         self.transaction_table.setColumnCount(11)
@@ -2897,13 +3021,18 @@ class MainWindow(QMainWindow):
             self.current_ledger_id = ledger_id
             ledger_info = self.ledgers[ledger_id]
             self.current_ledger_label.setText(f"当前账本: {ledger_info['name']} ({ledger_info['type']})")
+            self.initialize_search_controls()
             self.load_transactions()
     
-    def load_transactions(self):
+    def load_transactions(self, filtered_transactions=None):
         if not self.current_ledger_id:
             return
         
-        transactions = self.db_manager.get_transactions(self.current_ledger_id)
+        if filtered_transactions is not None:
+            transactions = filtered_transactions
+        else:
+            transactions = self.db_manager.get_transactions(self.current_ledger_id)
+            
         self.transaction_table.setRowCount(len(transactions))
         
         for row, transaction in enumerate(transactions):
@@ -2915,13 +3044,148 @@ class MainWindow(QMainWindow):
             self.transaction_table.setItem(row, 1, QTableWidgetItem(transaction_type))
             self.transaction_table.setItem(row, 2, QTableWidgetItem(category))
             self.transaction_table.setItem(row, 3, QTableWidgetItem(subcategory))
-            self.transaction_table.setItem(row, 4, QTableWidgetItem(f"¥{amount:.2f}"))
+            self.transaction_table.setItem(row, 4, QTableWidgetItem(f"¥{abs(amount):.2f}"))
             self.transaction_table.setItem(row, 5, QTableWidgetItem(account or ""))
             self.transaction_table.setItem(row, 6, QTableWidgetItem(description or ""))
             self.transaction_table.setItem(row, 7, QTableWidgetItem("是" if is_settled else "否"))
             self.transaction_table.setItem(row, 8, QTableWidgetItem(f"¥{refund_amount:.2f}" if refund_amount > 0 else ""))
             self.transaction_table.setItem(row, 9, QTableWidgetItem(refund_reason or ""))
             self.transaction_table.setItem(row, 10, QTableWidgetItem(created_time))
+    
+    def initialize_search_controls(self):
+        """初始化搜索控件的选项"""
+        # 加载类别选项
+        categories = self.db_manager.get_categories()
+        category_set = set()
+        for parent, sub in categories:
+            category_set.add(parent)
+        
+        self.category_combo.clear()
+        self.category_combo.addItem("")
+        self.category_combo.addItems(sorted(category_set))
+        
+        # 加载账户选项
+        accounts = self.db_manager.get_accounts()
+        self.account_search_combo.clear()
+        self.account_search_combo.addItem("")
+        for account in accounts:
+            self.account_search_combo.addItem(account[1])
+    
+    def on_category_changed(self, category):
+        """类别改变时更新子类别选项"""
+        self.subcategory_combo.clear()
+        self.subcategory_combo.addItem("")
+        
+        if category:
+            categories = self.db_manager.get_categories()
+            subcategories = set()
+            for parent, sub in categories:
+                if parent == category:
+                    subcategories.add(sub)
+            self.subcategory_combo.addItems(sorted(subcategories))
+    
+    def search_transactions(self):
+        """执行搜索"""
+        if not self.current_ledger_id:
+            QMessageBox.warning(self, "警告", "请先选择账本！")
+            return
+        
+        # 获取所有交易记录
+        all_transactions = self.db_manager.get_transactions(self.current_ledger_id)
+        filtered_transactions = []
+        
+        keyword = self.keyword_search_edit.text().strip().lower()
+        category = self.category_combo.currentText()
+        subcategory = self.subcategory_combo.currentText()
+        account = self.account_search_combo.currentText()
+        transaction_type = self.transaction_type_combo.currentText()
+        settled_status = self.settled_combo.currentText()
+        refund_status = self.refund_combo.currentText()
+        min_amount = self.min_amount_spin.value()
+        max_amount = self.max_amount_spin.value()
+        start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
+        end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
+        
+        for transaction in all_transactions:
+            (trans_id, ledger_id, transaction_date, trans_type, trans_category, trans_subcategory, 
+             amount, trans_account, description, is_settled, refund_amount, 
+             refund_reason, created_time) = transaction
+            
+            # 关键词搜索
+            if keyword:
+                searchable_text = f"{description or ''} {trans_category} {trans_subcategory} {trans_account or ''} {refund_reason or ''}".lower()
+                if keyword not in searchable_text:
+                    continue
+            
+            # 类别搜索
+            if category and trans_category != category:
+                continue
+            
+            if subcategory and trans_subcategory != subcategory:
+                continue
+            
+            # 账户搜索
+            if account and trans_account != account:
+                continue
+            
+            # 收支类型搜索
+            if transaction_type and trans_type != transaction_type:
+                continue
+            
+            # 销账状态搜索
+            if settled_status:
+                if settled_status == "已销账" and not is_settled:
+                    continue
+                elif settled_status == "未销账" and is_settled:
+                    continue
+            
+            # 退款状态搜索
+            if refund_status:
+                if refund_status == "有退款" and refund_amount <= 0:
+                    continue
+                elif refund_status == "无退款" and refund_amount > 0:
+                    continue
+            
+            # 金额范围搜索
+            abs_amount = abs(amount)
+            if min_amount > 0 and abs_amount < min_amount:
+                continue
+            if max_amount < 999999.99 and abs_amount > max_amount:
+                continue
+            
+            # 时间范围搜索
+            if transaction_date < start_date or transaction_date > end_date:
+                continue
+            
+            # 通过所有筛选条件
+            filtered_transactions.append(transaction)
+        
+        # 显示筛选结果
+        self.load_transactions(filtered_transactions)
+        
+        # 显示搜索结果数量
+        result_count = len(filtered_transactions)
+        total_count = len(all_transactions)
+        if keyword or category or subcategory or account or transaction_type or settled_status or refund_status or min_amount > 0 or max_amount < 999999.99:
+            QMessageBox.information(self, "搜索结果", f"找到 {result_count} 条记录，共 {total_count} 条记录")
+    
+    def clear_search(self):
+        """清除搜索条件"""
+        self.keyword_search_edit.clear()
+        self.category_combo.setCurrentIndex(0)
+        self.subcategory_combo.clear()
+        self.subcategory_combo.addItem("")
+        self.account_search_combo.setCurrentIndex(0)
+        self.transaction_type_combo.setCurrentIndex(0)
+        self.settled_combo.setCurrentIndex(0)
+        self.refund_combo.setCurrentIndex(0)
+        self.min_amount_spin.setValue(0)
+        self.max_amount_spin.setValue(999999.99)
+        self.start_date_edit.setDate(QDate.currentDate().addMonths(-1))
+        self.end_date_edit.setDate(QDate.currentDate())
+        
+        # 重新加载所有交易记录
+        self.load_transactions()
     
     def add_ledger(self):
         dialog = AddLedgerDialog(self)
