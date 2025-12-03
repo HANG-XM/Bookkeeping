@@ -6,9 +6,71 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                             QTableWidget, QTableWidgetItem, QTabWidget, QDialog,
                             QFormLayout, QTextEdit, QDateTimeEdit, QCheckBox,
                             QDoubleSpinBox, QMessageBox, QSplitter, QGroupBox,
-                            QTreeWidget, QTreeWidgetItem, QHeaderView, QSpinBox)
-from PyQt6.QtCore import Qt, QDateTime
+                            QTreeWidget, QTreeWidgetItem, QHeaderView, QSpinBox,
+                            QCalendarWidget, QDateEdit, QScrollArea)
+from PyQt6.QtCore import Qt, QDateTime, QDate
 from PyQt6.QtGui import QFont, QIcon
+
+def number_to_chinese(num):
+    """将数字转换为中文大写"""
+    if num == 0:
+        return "零元整"
+    
+    digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖']
+    units = ['', '拾', '佰', '仟']
+    big_units = ['', '万', '亿']
+    
+    # 处理小数部分
+    integer_part = int(num)
+    decimal_part = round((num - integer_part) * 100)
+    
+    if decimal_part >= 100:
+        integer_part += decimal_part // 100
+        decimal_part = decimal_part % 100
+    
+    result = ""
+    
+    # 处理整数部分
+    if integer_part == 0:
+        result = "零"
+    else:
+        str_num = str(integer_part)
+        length = len(str_num)
+        zero_flag = False
+        
+        for i, digit in enumerate(str_num):
+            digit_int = int(digit)
+            pos = length - i - 1
+            
+            if digit_int == 0:
+                zero_flag = True
+            else:
+                if zero_flag and i > 0:
+                    result += digits[0]
+                result += digits[digit_int] + units[pos % 4]
+                zero_flag = False
+            
+            if pos % 4 == 0 and pos > 0:
+                if zero_flag:
+                    result += digits[0]
+                    zero_flag = False
+                result += big_units[pos // 4]
+    
+    result += "元"
+    
+    # 处理小数部分
+    if decimal_part == 0:
+        result += "整"
+    else:
+        jiao = decimal_part // 10
+        fen = decimal_part % 10
+        
+        if jiao > 0:
+            result += digits[jiao] + "角"
+        if fen > 0:
+            result += digits[fen] + "分"
+    
+    return result
 
 class DatabaseManager:
     def __init__(self, db_path="bookkeeping.db"):
@@ -274,6 +336,227 @@ class DatabaseManager:
         transfers = cursor.fetchall()
         conn.close()
         return transfers
+    
+    def get_transactions_by_date_range(self, start_date, end_date, ledger_id=None):
+        """获取指定日期范围内的交易记录"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if ledger_id:
+            cursor.execute('''
+                SELECT * FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
+                ORDER BY transaction_date DESC, created_time DESC
+            ''', (start_date, end_date, ledger_id))
+        else:
+            cursor.execute('''
+                SELECT * FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ?
+                ORDER BY transaction_date DESC, created_time DESC
+            ''', (start_date, end_date))
+        
+        transactions = cursor.fetchall()
+        conn.close()
+        return transactions
+    
+    def get_statistics_summary(self, start_date, end_date, ledger_id=None):
+        """获取收支汇总统计"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if ledger_id:
+            cursor.execute('''
+                SELECT 
+                    transaction_type,
+                    SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                    SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                    COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
+                GROUP BY transaction_type
+            ''', (start_date, end_date, ledger_id))
+        else:
+            cursor.execute('''
+                SELECT 
+                    transaction_type,
+                    SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                    SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                    COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ?
+                GROUP BY transaction_type
+            ''', (start_date, end_date))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        total_income = 0.0
+        total_expense = 0.0
+        
+        for row in results:
+            if row[0] == "收入":
+                total_income = row[1]
+            elif row[0] == "支出":
+                total_expense = row[1]
+        
+        return {
+            'total_income': total_income,
+            'total_expense': total_expense,
+            'net_income': total_income - total_expense
+        }
+    
+    def get_category_statistics(self, start_date, end_date, transaction_type, level="parent", ledger_id=None):
+        """获取类别统计"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if level == "parent":
+            category_field = "category"
+        else:
+            category_field = "subcategory"
+        
+        if ledger_id:
+            cursor.execute(f'''
+                SELECT {category_field}, SUM(ABS(amount)) as amount, COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = ?
+                GROUP BY {category_field}
+                ORDER BY amount DESC
+            ''', (start_date, end_date, ledger_id, transaction_type))
+        else:
+            cursor.execute(f'''
+                SELECT {category_field}, SUM(ABS(amount)) as amount, COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND transaction_type = ?
+                GROUP BY {category_field}
+                ORDER BY amount DESC
+            ''', (start_date, end_date, transaction_type))
+        
+        results = cursor.fetchall()
+        conn.close()
+        return results
+    
+    def get_account_statistics(self, start_date, end_date, ledger_id=None):
+        """获取账户统计"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if ledger_id:
+            cursor.execute('''
+                SELECT account, 
+                       SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                       SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                       COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND account IS NOT NULL AND account != ''
+                GROUP BY account
+                ORDER BY (income + expense) DESC
+            ''', (start_date, end_date, ledger_id))
+        else:
+            cursor.execute('''
+                SELECT account, 
+                       SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                       SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                       COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND account IS NOT NULL AND account != ''
+                GROUP BY account
+                ORDER BY (income + expense) DESC
+            ''', (start_date, end_date))
+        
+        results = cursor.fetchall()
+        conn.close()
+        return results
+    
+    def get_settlement_statistics(self, start_date, end_date, ledger_id=None):
+        """获取销账状态统计"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if ledger_id:
+            cursor.execute('''
+                SELECT 
+                    is_settled,
+                    SUM(ABS(amount)) as amount,
+                    COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = '支出'
+                GROUP BY is_settled
+            ''', (start_date, end_date, ledger_id))
+        else:
+            cursor.execute('''
+                SELECT 
+                    is_settled,
+                    SUM(ABS(amount)) as amount,
+                    COUNT(*) as count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND transaction_type = '支出'
+                GROUP BY is_settled
+            ''', (start_date, end_date))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        settled_amount = 0.0
+        unsettled_amount = 0.0
+        
+        for row in results:
+            if row[0] == 1:  # 已销账
+                settled_amount = row[1]
+            else:  # 未销账
+                unsettled_amount = row[1]
+        
+        return {
+            'settled_amount': settled_amount,
+            'unsettled_amount': unsettled_amount,
+            'total_amount': settled_amount + unsettled_amount
+        }
+    
+    def get_refund_statistics(self, start_date, end_date, ledger_id=None):
+        """获取退款统计"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if ledger_id:
+            cursor.execute('''
+                SELECT 
+                    SUM(refund_amount) as total_refund,
+                    COUNT(CASE WHEN refund_amount > 0 THEN 1 END) as refund_count,
+                    SUM(ABS(amount)) as total_amount,
+                    COUNT(*) as total_count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = '支出'
+            ''', (start_date, end_date, ledger_id))
+        else:
+            cursor.execute('''
+                SELECT 
+                    SUM(refund_amount) as total_refund,
+                    COUNT(CASE WHEN refund_amount > 0 THEN 1 END) as refund_count,
+                    SUM(ABS(amount)) as total_amount,
+                    COUNT(*) as total_count
+                FROM transactions 
+                WHERE transaction_date BETWEEN ? AND ? AND transaction_type = '支出'
+            ''', (start_date, end_date))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result and result[0]:
+            return {
+                'total_refund': result[0],
+                'refund_count': result[1],
+                'total_amount': result[2],
+                'total_count': result[3],
+                'refund_ratio': (result[0] / result[2] * 100) if result[2] > 0 else 0
+            }
+        else:
+            return {
+                'total_refund': 0.0,
+                'refund_count': 0,
+                'total_amount': 0.0,
+                'total_count': 0,
+                'refund_ratio': 0.0
+            }
 
 class AddLedgerDialog(QDialog):
     def __init__(self, parent=None):
@@ -435,7 +718,6 @@ class AddIncomeDialog(QDialog):
         category_layout.addWidget(main_category_label)
         
         # 创建滚动区域
-        from PyQt6.QtWidgets import QScrollArea
         self.main_category_scroll = QScrollArea()
         self.main_category_scroll.setWidgetResizable(True)
         self.main_category_scroll.setMaximumHeight(60)
@@ -671,7 +953,6 @@ class AddExpenseDialog(QDialog):
         category_layout.addWidget(main_category_label)
         
         # 创建滚动区域
-        from PyQt6.QtWidgets import QScrollArea
         self.main_category_scroll = QScrollArea()
         self.main_category_scroll.setWidgetResizable(True)
         self.main_category_scroll.setMaximumHeight(80)
@@ -1105,6 +1386,402 @@ class AssetManagementWidget(QWidget):
                 self.load_transfers()
                 QMessageBox.information(self, "成功", "转账记录添加成功！")
 
+class StatisticsWidget(QWidget):
+    def __init__(self, db_manager):
+        super().__init__()
+        self.db_manager = db_manager
+        self.current_view = "day"  # day, week, month, year, custom
+        self.current_date = QDate.currentDate()
+        self.show_chinese_amount = False
+        self.category_level = "parent"  # parent, subcategory
+        self.setup_ui()
+        self.update_statistics()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 视图切换区域
+        view_control_group = QGroupBox("视图控制")
+        view_control_layout = QHBoxLayout()
+        
+        # 视图类型选择
+        self.view_combo = QComboBox()
+        self.view_combo.addItems(["日视图", "周视图", "月视图", "年视图", "自定义时间"])
+        self.view_combo.currentTextChanged.connect(self.on_view_changed)
+        
+        # 日期导航按钮
+        self.prev_btn = QPushButton("◀")
+        self.prev_btn.clicked.connect(self.prev_period)
+        self.current_date_label = QLabel()
+        self.next_btn = QPushButton("▶")
+        self.next_btn.clicked.connect(self.next_period)
+        
+        # 自定义日期选择器（默认隐藏）
+        self.start_date_edit = QDateEdit()
+        self.start_date_edit.setDate(QDate.currentDate().addDays(-30))
+        self.start_date_edit.setDateRange(QDate(2000, 1, 1), QDate.currentDate())
+        self.start_date_edit.dateChanged.connect(self.on_custom_date_changed)
+        
+        self.end_date_edit = QDateEdit()
+        self.end_date_edit.setDate(QDate.currentDate())
+        self.end_date_edit.setDateRange(QDate(2000, 1, 1), QDate.currentDate())
+        self.end_date_edit.dateChanged.connect(self.on_custom_date_changed)
+        
+        # 快捷选择按钮
+        quick_layout = QVBoxLayout()
+        recent_7_btn = QPushButton("近7天")
+        recent_7_btn.clicked.connect(lambda: self.set_quick_range(7))
+        recent_30_btn = QPushButton("近30天")
+        recent_30_btn.clicked.connect(lambda: self.set_quick_range(30))
+        recent_90_btn = QPushButton("近90天")
+        recent_90_btn.clicked.connect(lambda: self.set_quick_range(90))
+        
+        quick_btn_layout = QHBoxLayout()
+        quick_btn_layout.addWidget(recent_7_btn)
+        quick_btn_layout.addWidget(recent_30_btn)
+        quick_btn_layout.addWidget(recent_90_btn)
+        quick_layout.addLayout(quick_btn_layout)
+        
+        self.custom_date_widget = QWidget()
+        custom_date_layout = QHBoxLayout()
+        custom_date_layout.addWidget(QLabel("起始日期:"))
+        custom_date_layout.addWidget(self.start_date_edit)
+        custom_date_layout.addWidget(QLabel("结束日期:"))
+        custom_date_layout.addWidget(self.end_date_edit)
+        custom_date_layout.addLayout(quick_layout)
+        self.custom_date_widget.setLayout(custom_date_layout)
+        self.custom_date_widget.hide()
+        
+        view_control_layout.addWidget(QLabel("视图类型:"))
+        view_control_layout.addWidget(self.view_combo)
+        view_control_layout.addWidget(self.prev_btn)
+        view_control_layout.addWidget(self.current_date_label)
+        view_control_layout.addWidget(self.next_btn)
+        view_control_layout.addStretch()
+        
+        view_control_group_layout = QVBoxLayout()
+        view_control_group_layout.addLayout(view_control_layout)
+        view_control_group_layout.addWidget(self.custom_date_widget)
+        view_control_group.setLayout(view_control_group_layout)
+        
+        layout.addWidget(view_control_group)
+        
+        # 统计选项
+        options_group = QGroupBox("统计选项")
+        options_layout = QHBoxLayout()
+        
+        self.show_chinese_check = QCheckBox("显示金额大写")
+        self.show_chinese_check.toggled.connect(self.toggle_chinese_amount)
+        
+        self.category_level_combo = QComboBox()
+        self.category_level_combo.addItems(["按主类别统计", "按子类别统计"])
+        self.category_level_combo.currentTextChanged.connect(self.on_category_level_changed)
+        
+        options_layout.addWidget(self.show_chinese_check)
+        options_layout.addWidget(QLabel("类别统计:"))
+        options_layout.addWidget(self.category_level_combo)
+        options_layout.addStretch()
+        
+        options_group.setLayout(options_layout)
+        layout.addWidget(options_group)
+        
+        # 统计结果区域
+        stats_content = QWidget()
+        stats_layout = QVBoxLayout()
+        
+        # 收支汇总
+        summary_group = QGroupBox("收支汇总")
+        summary_layout = QFormLayout()
+        
+        self.total_income_label = QLabel("¥0.00")
+        self.total_expense_label = QLabel("¥0.00")
+        self.net_income_label = QLabel("¥0.00")
+        self.income_chinese_label = QLabel("")
+        self.expense_chinese_label = QLabel("")
+        self.net_chinese_label = QLabel("")
+        
+        summary_layout.addRow("总收入:", self.total_income_label)
+        summary_layout.addRow("", self.income_chinese_label)
+        summary_layout.addRow("总支出:", self.total_expense_label)
+        summary_layout.addRow("", self.expense_chinese_label)
+        summary_layout.addRow("净收支:", self.net_income_label)
+        summary_layout.addRow("", self.net_chinese_label)
+        
+        summary_group.setLayout(summary_layout)
+        stats_layout.addWidget(summary_group)
+        
+        # 收支结构和账户分布
+        structure_layout = QHBoxLayout()
+        
+        # 收入结构
+        income_structure_group = QGroupBox("收入结构")
+        self.income_structure_table = QTableWidget()
+        self.income_structure_table.setColumnCount(3)
+        self.income_structure_table.setHorizontalHeaderLabels(["类别", "金额", "占比"])
+        self.income_structure_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        income_structure_layout = QVBoxLayout()
+        income_structure_layout.addWidget(self.income_structure_table)
+        income_structure_group.setLayout(income_structure_layout)
+        
+        # 支出结构
+        expense_structure_group = QGroupBox("支出结构")
+        self.expense_structure_table = QTableWidget()
+        self.expense_structure_table.setColumnCount(3)
+        self.expense_structure_table.setHorizontalHeaderLabels(["类别", "金额", "占比"])
+        self.expense_structure_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        expense_structure_layout = QVBoxLayout()
+        expense_structure_layout.addWidget(self.expense_structure_table)
+        expense_structure_group.setLayout(expense_structure_layout)
+        
+        # 账户分布
+        account_distribution_group = QGroupBox("账户分布")
+        self.account_distribution_table = QTableWidget()
+        self.account_distribution_table.setColumnCount(4)
+        self.account_distribution_table.setHorizontalHeaderLabels(["账户", "收入", "支出", "总计"])
+        self.account_distribution_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        account_distribution_layout = QVBoxLayout()
+        account_distribution_layout.addWidget(self.account_distribution_table)
+        account_distribution_group.setLayout(account_distribution_layout)
+        
+        structure_layout.addWidget(income_structure_group)
+        structure_layout.addWidget(expense_structure_group)
+        structure_layout.addWidget(account_distribution_group)
+        
+        stats_layout.addLayout(structure_layout)
+        
+        # 核心字段关联统计
+        core_stats_layout = QHBoxLayout()
+        
+        # 销账状态分布
+        settlement_group = QGroupBox("销账状态分布")
+        settlement_form_layout = QFormLayout()
+        self.settled_amount_label = QLabel("¥0.00")
+        self.unsettled_amount_label = QLabel("¥0.00")
+        self.settled_ratio_label = QLabel("0%")
+        
+        settlement_form_layout.addRow("已销账金额:", self.settled_amount_label)
+        settlement_form_layout.addRow("未销账金额:", self.unsettled_amount_label)
+        settlement_form_layout.addRow("销账比例:", self.settled_ratio_label)
+        
+        settlement_group.setLayout(settlement_form_layout)
+        
+        # 退款统计
+        refund_group = QGroupBox("退款统计")
+        refund_form_layout = QFormLayout()
+        self.refund_amount_label = QLabel("¥0.00")
+        self.refund_count_label = QLabel("0")
+        self.refund_ratio_label = QLabel("0%")
+        
+        refund_form_layout.addRow("退款总额:", self.refund_amount_label)
+        refund_form_layout.addRow("退款笔数:", self.refund_count_label)
+        refund_form_layout.addRow("退款占比:", self.refund_ratio_label)
+        
+        refund_group.setLayout(refund_form_layout)
+        
+        core_stats_layout.addWidget(settlement_group)
+        core_stats_layout.addWidget(refund_group)
+        
+        stats_layout.addLayout(core_stats_layout)
+        stats_content.setLayout(stats_layout)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(stats_content)
+        
+        layout.addWidget(scroll_area)
+        self.setLayout(layout)
+        
+        # 初始化显示
+        self.update_date_display()
+    
+    def on_view_changed(self, view_text):
+        """视图类型改变"""
+        view_map = {
+            "日视图": "day",
+            "周视图": "week", 
+            "月视图": "month",
+            "年视图": "year",
+            "自定义时间": "custom"
+        }
+        self.current_view = view_map[view_text]
+        
+        if self.current_view == "custom":
+            self.custom_date_widget.show()
+            self.prev_btn.hide()
+            self.next_btn.hide()
+        else:
+            self.custom_date_widget.hide()
+            self.prev_btn.show()
+            self.next_btn.show()
+        
+        self.update_date_display()
+        self.update_statistics()
+    
+    def update_date_display(self):
+        """更新日期显示"""
+        if self.current_view == "day":
+            self.current_date_label.setText(self.current_date.toString("yyyy年MM月dd日"))
+        elif self.current_view == "week":
+            # 获取周一和周日
+            monday = self.current_date.addDays(-self.current_date.dayOfWeek() + 1)
+            sunday = monday.addDays(6)
+            self.current_date_label.setText(f"{monday.toString('MM.dd')} - {sunday.toString('MM.dd')}")
+        elif self.current_view == "month":
+            self.current_date_label.setText(self.current_date.toString("yyyy年MM月"))
+        elif self.current_view == "year":
+            self.current_date_label.setText(self.current_date.toString("yyyy年"))
+    
+    def get_date_range(self):
+        """获取当前视图的日期范围"""
+        if self.current_view == "day":
+            start_date = self.current_date.toString("yyyy-MM-dd")
+            end_date = self.current_date.toString("yyyy-MM-dd")
+        elif self.current_view == "week":
+            monday = self.current_date.addDays(-self.current_date.dayOfWeek() + 1)
+            sunday = monday.addDays(6)
+            start_date = monday.toString("yyyy-MM-dd")
+            end_date = sunday.toString("yyyy-MM-dd")
+        elif self.current_view == "month":
+            start_date = self.current_date.toString("yyyy-MM-01")
+            end_date = self.current_date.toString(f"yyyy-MM-{self.current_date.daysInMonth()}")
+        elif self.current_view == "year":
+            start_date = self.current_date.toString("yyyy-01-01")
+            end_date = self.current_date.toString("yyyy-12-31")
+        elif self.current_view == "custom":
+            start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
+            end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
+        else:
+            start_date = end_date = self.current_date.toString("yyyy-MM-dd")
+        
+        return start_date, end_date
+    
+    def prev_period(self):
+        """切换到上一个时间段"""
+        if self.current_view == "day":
+            self.current_date = self.current_date.addDays(-1)
+        elif self.current_view == "week":
+            self.current_date = self.current_date.addDays(-7)
+        elif self.current_view == "month":
+            self.current_date = self.current_date.addMonths(-1)
+        elif self.current_view == "year":
+            self.current_date = self.current_date.addYears(-1)
+        
+        self.update_date_display()
+        self.update_statistics()
+    
+    def next_period(self):
+        """切换到下一个时间段"""
+        if self.current_view == "day":
+            self.current_date = self.current_date.addDays(1)
+        elif self.current_view == "week":
+            self.current_date = self.current_date.addDays(7)
+        elif self.current_view == "month":
+            self.current_date = self.current_date.addMonths(1)
+        elif self.current_view == "year":
+            self.current_date = self.current_date.addYears(1)
+        
+        self.update_date_display()
+        self.update_statistics()
+    
+    def on_custom_date_changed(self):
+        """自定义日期改变"""
+        start_date = self.start_date_edit.date()
+        end_date = self.end_date_edit.date()
+        
+        # 确保起始日期不大于结束日期
+        if start_date > end_date:
+            self.end_date_edit.setDate(start_date)
+        
+        self.update_statistics()
+    
+    def set_quick_range(self, days):
+        """设置快捷时间范围"""
+        end_date = QDate.currentDate()
+        start_date = end_date.addDays(-days + 1)
+        
+        self.start_date_edit.setDate(start_date)
+        self.end_date_edit.setDate(end_date)
+        self.update_statistics()
+    
+    def toggle_chinese_amount(self, checked):
+        """切换中文大写显示"""
+        self.show_chinese_amount = checked
+        self.update_statistics()
+    
+    def on_category_level_changed(self, text):
+        """类别统计层级改变"""
+        self.category_level = "subcategory" if "子类别" in text else "parent"
+        self.update_statistics()
+    
+    def update_statistics(self):
+        """更新统计数据"""
+        start_date, end_date = self.get_date_range()
+        
+        # 获取收支汇总
+        summary = self.db_manager.get_statistics_summary(start_date, end_date)
+        
+        self.total_income_label.setText(f"¥{summary['total_income']:.2f}")
+        self.total_expense_label.setText(f"¥{summary['total_expense']:.2f}")
+        self.net_income_label.setText(f"¥{summary['net_income']:.2f}")
+        
+        if self.show_chinese_amount:
+            self.income_chinese_label.setText(number_to_chinese(summary['total_income']))
+            self.expense_chinese_label.setText(number_to_chinese(summary['total_expense']))
+            self.net_chinese_label.setText(number_to_chinese(abs(summary['net_income'])))
+        else:
+            self.income_chinese_label.setText("")
+            self.expense_chinese_label.setText("")
+            self.net_chinese_label.setText("")
+        
+        # 更新收入结构
+        income_stats = self.db_manager.get_category_statistics(start_date, end_date, "收入", self.category_level)
+        self.income_structure_table.setRowCount(len(income_stats))
+        
+        for i, (category, amount, count) in enumerate(income_stats):
+            ratio = (amount / summary['total_income'] * 100) if summary['total_income'] > 0 else 0
+            self.income_structure_table.setItem(i, 0, QTableWidgetItem(category))
+            self.income_structure_table.setItem(i, 1, QTableWidgetItem(f"¥{amount:.2f}"))
+            self.income_structure_table.setItem(i, 2, QTableWidgetItem(f"{ratio:.1f}%"))
+        
+        # 更新支出结构
+        expense_stats = self.db_manager.get_category_statistics(start_date, end_date, "支出", self.category_level)
+        self.expense_structure_table.setRowCount(len(expense_stats))
+        
+        for i, (category, amount, count) in enumerate(expense_stats):
+            ratio = (amount / summary['total_expense'] * 100) if summary['total_expense'] > 0 else 0
+            self.expense_structure_table.setItem(i, 0, QTableWidgetItem(category))
+            self.expense_structure_table.setItem(i, 1, QTableWidgetItem(f"¥{amount:.2f}"))
+            self.expense_structure_table.setItem(i, 2, QTableWidgetItem(f"{ratio:.1f}%"))
+        
+        # 更新账户分布
+        account_stats = self.db_manager.get_account_statistics(start_date, end_date)
+        self.account_distribution_table.setRowCount(len(account_stats))
+        
+        for i, (account, income, expense, count) in enumerate(account_stats):
+            total = income + expense
+            self.account_distribution_table.setItem(i, 0, QTableWidgetItem(account))
+            self.account_distribution_table.setItem(i, 1, QTableWidgetItem(f"¥{income:.2f}"))
+            self.account_distribution_table.setItem(i, 2, QTableWidgetItem(f"¥{expense:.2f}"))
+            self.account_distribution_table.setItem(i, 3, QTableWidgetItem(f"¥{total:.2f}"))
+        
+        # 更新销账状态统计
+        settlement_stats = self.db_manager.get_settlement_statistics(start_date, end_date)
+        self.settled_amount_label.setText(f"¥{settlement_stats['settled_amount']:.2f}")
+        self.unsettled_amount_label.setText(f"¥{settlement_stats['unsettled_amount']:.2f}")
+        
+        if settlement_stats['total_amount'] > 0:
+            settled_ratio = (settlement_stats['settled_amount'] / settlement_stats['total_amount'] * 100)
+            self.settled_ratio_label.setText(f"{settled_ratio:.1f}%")
+        else:
+            self.settled_ratio_label.setText("0%")
+        
+        # 更新退款统计
+        refund_stats = self.db_manager.get_refund_statistics(start_date, end_date)
+        self.refund_amount_label.setText(f"¥{refund_stats['total_refund']:.2f}")
+        self.refund_count_label.setText(str(refund_stats['refund_count']))
+        self.refund_ratio_label.setText(f"{refund_stats['refund_ratio']:.1f}%")
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1238,6 +1915,10 @@ class MainWindow(QMainWindow):
         # 资产管理标签页
         self.asset_widget = AssetManagementWidget(self.db_manager)
         tab_widget.addTab(self.asset_widget, "资产管理")
+        
+        # 统计分析标签页
+        self.statistics_widget = StatisticsWidget(self.db_manager)
+        tab_widget.addTab(self.statistics_widget, "统计分析")
         
         return tab_widget
     
