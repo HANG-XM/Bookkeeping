@@ -47,7 +47,9 @@ class DatabaseManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 type TEXT NOT NULL,
-                balance REAL DEFAULT 0.0
+                balance REAL DEFAULT 0.0,
+                bank TEXT,
+                description TEXT
             )
         ''')
         
@@ -68,6 +70,19 @@ class DatabaseManager:
                 refund_reason TEXT,
                 created_time TEXT NOT NULL,
                 FOREIGN KEY (ledger_id) REFERENCES ledgers (id)
+            )
+        ''')
+        
+        # 创建资金流转表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transfers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transfer_date TEXT NOT NULL,
+                from_account TEXT NOT NULL,
+                to_account TEXT NOT NULL,
+                amount REAL NOT NULL,
+                description TEXT,
+                created_time TEXT NOT NULL
             )
         ''')
         
@@ -192,13 +207,13 @@ class DatabaseManager:
         conn.close()
         return transactions
     
-    def add_account(self, name, account_type, balance=0.0):
+    def add_account(self, name, account_type, balance=0.0, bank=None, description=None):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO accounts (name, type, balance)
-            VALUES (?, ?, ?)
-        ''', (name, account_type, balance))
+            INSERT INTO accounts (name, type, balance, bank, description)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (name, account_type, balance, bank, description))
         conn.commit()
         conn.close()
     
@@ -209,6 +224,56 @@ class DatabaseManager:
         accounts = cursor.fetchall()
         conn.close()
         return accounts
+    
+    def update_account_balance(self, account_name, amount_change):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE accounts SET balance = balance + ? WHERE name = ?
+        ''', (amount_change, account_name))
+        conn.commit()
+        conn.close()
+    
+    def get_account_balance(self, account_name):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT balance FROM accounts WHERE name = ?', (account_name,))
+        result = cursor.fetchone()
+        conn.close()
+        return result[0] if result else 0.0
+    
+    def add_transfer(self, transfer_date, from_account, to_account, amount, description):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 添加转账记录
+        cursor.execute('''
+            INSERT INTO transfers (transfer_date, from_account, to_account, amount, description, created_time)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (transfer_date, from_account, to_account, amount, description, created_time))
+        
+        # 更新账户余额
+        cursor.execute('''
+            UPDATE accounts SET balance = balance - ? WHERE name = ?
+        ''', (amount, from_account))
+        
+        cursor.execute('''
+            UPDATE accounts SET balance = balance + ? WHERE name = ?
+        ''', (amount, to_account))
+        
+        conn.commit()
+        conn.close()
+    
+    def get_transfers(self):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM transfers ORDER BY transfer_date DESC, created_time DESC
+        ''')
+        transfers = cursor.fetchall()
+        conn.close()
+        return transfers
 
 class AddLedgerDialog(QDialog):
     def __init__(self, parent=None):
@@ -802,6 +867,244 @@ class AddExpenseDialog(QDialog):
             'refund_reason': self.refund_reason_edit.text()
         }
 
+class AddAccountDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("添加账户")
+        self.setModal(True)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+        
+        self.name_edit = QLineEdit()
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["现金", "银行卡", "支付宝", "微信", "其他"])
+        self.bank_edit = QLineEdit()
+        self.balance_spin = QDoubleSpinBox()
+        self.balance_spin.setRange(0, 999999.99)
+        self.balance_spin.setDecimals(2)
+        self.balance_spin.setPrefix("¥")
+        self.description_edit = QTextEdit()
+        self.description_edit.setMaximumHeight(80)
+        
+        form_layout.addRow("账户名称:", self.name_edit)
+        form_layout.addRow("账户类型:", self.type_combo)
+        form_layout.addRow("开户行:", self.bank_edit)
+        form_layout.addRow("初始余额:", self.balance_spin)
+        form_layout.addRow("备注:", self.description_edit)
+        
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(form_layout)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def get_data(self):
+        return {
+            'name': self.name_edit.text(),
+            'type': self.type_combo.currentText(),
+            'bank': self.bank_edit.text(),
+            'balance': self.balance_spin.value(),
+            'description': self.description_edit.toPlainText()
+        }
+
+class TransferDialog(QDialog):
+    def __init__(self, db_manager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.setWindowTitle("资金流转")
+        self.setModal(True)
+        self.setup_ui()
+        self.load_accounts()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+        
+        # 转账日期
+        self.date_edit = QDateTimeEdit()
+        self.date_edit.setDateTime(QDateTime.currentDateTime())
+        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+        
+        # 转出账户
+        self.from_account_combo = QComboBox()
+        
+        # 转入账户
+        self.to_account_combo = QComboBox()
+        
+        # 转账金额
+        self.amount_spin = QDoubleSpinBox()
+        self.amount_spin.setRange(0, 999999.99)
+        self.amount_spin.setDecimals(2)
+        self.amount_spin.setPrefix("¥")
+        
+        # 备注
+        self.description_edit = QLineEdit()
+        
+        form_layout.addRow("转账日期:", self.date_edit)
+        form_layout.addRow("转出账户:", self.from_account_combo)
+        form_layout.addRow("转入账户:", self.to_account_combo)
+        form_layout.addRow("转账金额:", self.amount_spin)
+        form_layout.addRow("备注:", self.description_edit)
+        
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(form_layout)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def load_accounts(self):
+        accounts = self.db_manager.get_accounts()
+        self.from_account_combo.clear()
+        self.to_account_combo.clear()
+        
+        for account in accounts:
+            self.from_account_combo.addItem(f"{account[1]} (余额: ¥{account[3]:.2f})")
+            self.to_account_combo.addItem(f"{account[1]} (余额: ¥{account[3]:.2f})")
+    
+    def get_data(self):
+        # 提取账户名称（去掉余额信息）
+        from_account = self.from_account_combo.currentText().split(" (余额:")[0]
+        to_account = self.to_account_combo.currentText().split(" (余额:")[0]
+        
+        return {
+            'transfer_date': self.date_edit.date().toString("yyyy-MM-dd"),
+            'from_account': from_account,
+            'to_account': to_account,
+            'amount': self.amount_spin.value(),
+            'description': self.description_edit.text()
+        }
+
+class AssetManagementWidget(QWidget):
+    def __init__(self, db_manager):
+        super().__init__()
+        self.db_manager = db_manager
+        self.setup_ui()
+        self.load_accounts()
+        self.load_transfers()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 账户管理区域
+        account_group = QGroupBox("账户管理")
+        account_layout = QVBoxLayout()
+        
+        # 账户操作按钮
+        account_btn_layout = QHBoxLayout()
+        add_account_btn = QPushButton("添加账户")
+        add_account_btn.clicked.connect(self.add_account)
+        account_btn_layout.addWidget(add_account_btn)
+        account_btn_layout.addStretch()
+        account_layout.addLayout(account_btn_layout)
+        
+        # 账户表格
+        self.account_table = QTableWidget()
+        self.account_table.setColumnCount(5)
+        self.account_table.setHorizontalHeaderLabels(["账户名称", "类型", "开户行", "余额", "备注"])
+        self.account_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        account_layout.addWidget(self.account_table)
+        
+        account_group.setLayout(account_layout)
+        layout.addWidget(account_group)
+        
+        # 资金流转区域
+        transfer_group = QGroupBox("资金流转")
+        transfer_layout = QVBoxLayout()
+        
+        # 转账按钮
+        transfer_btn_layout = QHBoxLayout()
+        add_transfer_btn = QPushButton("新增转账")
+        add_transfer_btn.clicked.connect(self.add_transfer)
+        transfer_btn_layout.addWidget(add_transfer_btn)
+        transfer_btn_layout.addStretch()
+        transfer_layout.addLayout(transfer_btn_layout)
+        
+        # 转账记录表格
+        self.transfer_table = QTableWidget()
+        self.transfer_table.setColumnCount(5)
+        self.transfer_table.setHorizontalHeaderLabels(["转账日期", "转出账户", "转入账户", "金额", "备注"])
+        self.transfer_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        transfer_layout.addWidget(self.transfer_table)
+        
+        transfer_group.setLayout(transfer_layout)
+        layout.addWidget(transfer_group)
+        
+        self.setLayout(layout)
+    
+    def load_accounts(self):
+        accounts = self.db_manager.get_accounts()
+        self.account_table.setRowCount(len(accounts))
+        
+        for row, account in enumerate(accounts):
+            (account_id, name, account_type, balance, bank, description) = account
+            self.account_table.setItem(row, 0, QTableWidgetItem(name))
+            self.account_table.setItem(row, 1, QTableWidgetItem(account_type))
+            self.account_table.setItem(row, 2, QTableWidgetItem(bank or ""))
+            self.account_table.setItem(row, 3, QTableWidgetItem(f"¥{balance:.2f}"))
+            self.account_table.setItem(row, 4, QTableWidgetItem(description or ""))
+    
+    def load_transfers(self):
+        transfers = self.db_manager.get_transfers()
+        self.transfer_table.setRowCount(len(transfers))
+        
+        for row, transfer in enumerate(transfers):
+            (transfer_id, transfer_date, from_account, to_account, amount, description, created_time) = transfer
+            self.transfer_table.setItem(row, 0, QTableWidgetItem(transfer_date))
+            self.transfer_table.setItem(row, 1, QTableWidgetItem(from_account))
+            self.transfer_table.setItem(row, 2, QTableWidgetItem(to_account))
+            self.transfer_table.setItem(row, 3, QTableWidgetItem(f"¥{amount:.2f}"))
+            self.transfer_table.setItem(row, 4, QTableWidgetItem(description or ""))
+    
+    def add_account(self):
+        dialog = AddAccountDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if data['name']:
+                self.db_manager.add_account(
+                    data['name'], data['type'], data['balance'], 
+                    data['bank'], data['description']
+                )
+                self.load_accounts()
+                QMessageBox.information(self, "成功", "账户添加成功！")
+    
+    def add_transfer(self):
+        dialog = TransferDialog(self.db_manager, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if data['from_account'] and data['to_account'] and data['amount'] > 0:
+                if data['from_account'] == data['to_account']:
+                    QMessageBox.warning(self, "警告", "转出账户和转入账户不能相同！")
+                    return
+                
+                # 检查转出账户余额
+                from_balance = self.db_manager.get_account_balance(data['from_account'])
+                if from_balance < data['amount']:
+                    QMessageBox.warning(self, "警告", f"转出账户余额不足！当前余额: ¥{from_balance:.2f}")
+                    return
+                
+                self.db_manager.add_transfer(
+                    data['transfer_date'], data['from_account'], 
+                    data['to_account'], data['amount'], data['description']
+                )
+                self.load_accounts()
+                self.load_transfers()
+                QMessageBox.information(self, "成功", "转账记录添加成功！")
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -867,13 +1170,17 @@ class MainWindow(QMainWindow):
         return widget
     
     def create_transaction_panel(self):
-        widget = QWidget()
-        layout = QVBoxLayout()
+        # 创建标签页
+        tab_widget = QTabWidget()
+        
+        # 交易记录标签页
+        transaction_widget = QWidget()
+        transaction_layout = QVBoxLayout()
         
         # 当前账本标题
         self.current_ledger_label = QLabel("请选择账本")
         self.current_ledger_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        layout.addWidget(self.current_ledger_label)
+        transaction_layout.addWidget(self.current_ledger_label)
         
         # 交易操作按钮
         transaction_btn_layout = QHBoxLayout()
@@ -914,7 +1221,7 @@ class MainWindow(QMainWindow):
         transaction_btn_layout.addWidget(add_income_btn)
         transaction_btn_layout.addWidget(add_expense_btn)
         transaction_btn_layout.addStretch()
-        layout.addLayout(transaction_btn_layout)
+        transaction_layout.addLayout(transaction_btn_layout)
         
         # 交易记录表格
         self.transaction_table = QTableWidget()
@@ -923,10 +1230,16 @@ class MainWindow(QMainWindow):
             "日期", "类型", "主类别", "子类别", "金额", "账户", "备注", "销账", "退款金额", "退款原因", "创建时间"
         ])
         self.transaction_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        layout.addWidget(self.transaction_table)
+        transaction_layout.addWidget(self.transaction_table)
         
-        widget.setLayout(layout)
-        return widget
+        transaction_widget.setLayout(transaction_layout)
+        tab_widget.addTab(transaction_widget, "交易记录")
+        
+        # 资产管理标签页
+        self.asset_widget = AssetManagementWidget(self.db_manager)
+        tab_widget.addTab(self.asset_widget, "资产管理")
+        
+        return tab_widget
     
     def load_ledgers(self):
         ledgers = self.db_manager.get_ledgers()
@@ -1026,11 +1339,18 @@ class MainWindow(QMainWindow):
                     )
                     self.load_transactions()
                     
+                    # 更新账户余额
+                    if data['account']:
+                        self.db_manager.update_account_balance(data['account'], data['amount'])
+                    
                     if dialog.is_add_more:
                         # 继续添加下一条记录
                         continue
                     else:
                         QMessageBox.information(self, "成功", "收入记录添加成功！")
+                        # 刷新资产管理页面的账户信息
+                        if hasattr(self, 'asset_widget'):
+                            self.asset_widget.load_accounts()
                         break
                 else:
                     QMessageBox.warning(self, "警告", "请填写必要的收入信息！")
@@ -1055,11 +1375,18 @@ class MainWindow(QMainWindow):
                     )
                     self.load_transactions()
                     
+                    # 更新账户余额（支出为负数）
+                    if data['account']:
+                        self.db_manager.update_account_balance(data['account'], data['amount'])
+                    
                     if dialog.is_add_more:
                         # 继续添加下一条记录
                         continue
                     else:
                         QMessageBox.information(self, "成功", "支出记录添加成功！")
+                        # 刷新资产管理页面的账户信息
+                        if hasattr(self, 'asset_widget'):
+                            self.asset_widget.load_accounts()
                         break
                 else:
                     QMessageBox.warning(self, "警告", "请填写必要的支出信息！")
