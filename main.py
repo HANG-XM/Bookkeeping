@@ -311,6 +311,45 @@ class DatabaseManager:
         conn.commit()
         conn.close()
     
+    def update_account(self, account_id, name, account_type, balance, bank, description):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE accounts SET name = ?, type = ?, balance = ?, bank = ?, description = ?
+            WHERE id = ?
+        ''', (name, account_type, balance, bank, description, account_id))
+        conn.commit()
+        conn.close()
+    
+    def delete_account(self, account_id):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM accounts WHERE id = ?', (account_id,))
+        conn.commit()
+        conn.close()
+    
+    def update_transaction(self, transaction_id, transaction_date, transaction_type, category, 
+                         subcategory, amount, account, description, is_settled, refund_amount, refund_reason):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE transactions SET 
+                transaction_date = ?, transaction_type = ?, category = ?, subcategory = ?,
+                amount = ?, account = ?, description = ?, is_settled = ?, 
+                refund_amount = ?, refund_reason = ?
+            WHERE id = ?
+        ''', (transaction_date, transaction_type, category, subcategory, amount, account,
+              description, is_settled, refund_amount, refund_reason, transaction_id))
+        conn.commit()
+        conn.close()
+    
+    def delete_transaction(self, transaction_id):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
+        conn.commit()
+        conn.close()
+    
     def get_accounts(self):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -755,6 +794,251 @@ class CategoryButton(QPushButton):
             self.style().unpolish(self)
             self.style().polish(self)
 
+class EditIncomeDialog(QDialog):
+    def __init__(self, db_manager, transaction_data, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.transaction_data = transaction_data
+        self.setWindowTitle("编辑收入记录")
+        self.setModal(True)
+        self.selected_category = None
+        self.selected_subcategory = None
+        self.transaction_type = "收入"
+        self.setup_ui()
+        self.load_income_categories()
+        self.load_transaction_data()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 基本信息区域
+        basic_info_group = QGroupBox("基本信息")
+        basic_layout = QFormLayout()
+        
+        # 交易时间
+        self.date_edit = QDateTimeEdit()
+        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+        
+        # 金额
+        self.amount_spin = QDoubleSpinBox()
+        self.amount_spin.setRange(0, 999999.99)
+        self.amount_spin.setDecimals(2)
+        self.amount_spin.setPrefix("¥")
+        
+        # 账户
+        self.account_combo = QComboBox()
+        self.load_accounts()
+        
+        basic_layout.addRow("交易时间:", self.date_edit)
+        basic_layout.addRow("金额:", self.amount_spin)
+        basic_layout.addRow("账户:", self.account_combo)
+        
+        basic_info_group.setLayout(basic_layout)
+        layout.addWidget(basic_info_group)
+        
+        # 类别选择区域
+        category_group = QGroupBox("收入类别选择")
+        category_layout = QVBoxLayout()
+        
+        # 主类别卡片区域
+        main_category_label = QLabel("主类别:")
+        main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        category_layout.addWidget(main_category_label)
+        
+        # 创建滚动区域
+        self.main_category_scroll = QScrollArea()
+        self.main_category_scroll.setWidgetResizable(True)
+        self.main_category_scroll.setMaximumHeight(60)
+        self.main_category_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.main_category_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.main_category_content = QWidget()
+        self.main_category_grid_layout = QVBoxLayout()
+        self.main_category_content.setLayout(self.main_category_grid_layout)
+        self.main_category_scroll.setWidget(self.main_category_content)
+        
+        category_layout.addWidget(self.main_category_scroll)
+        
+        # 子类别卡片区域
+        self.subcategory_label = QLabel("子类别:")
+        self.subcategory_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.subcategory_label.setVisible(False)
+        category_layout.addWidget(self.subcategory_label)
+        
+        self.subcategory_scroll = QScrollArea()
+        self.subcategory_scroll.setWidgetResizable(True)
+        self.subcategory_scroll.setMaximumHeight(60)
+        self.subcategory_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.subcategory_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.subcategory_content = QWidget()
+        self.subcategory_grid_layout = QVBoxLayout()
+        self.subcategory_content.setLayout(self.subcategory_grid_layout)
+        self.subcategory_scroll.setWidget(self.subcategory_content)
+        self.subcategory_scroll.setVisible(False)
+        
+        category_layout.addWidget(self.subcategory_scroll)
+        
+        category_group.setLayout(category_layout)
+        layout.addWidget(category_group)
+        
+        # 其他信息区域
+        other_info_group = QGroupBox("其他信息")
+        other_layout = QFormLayout()
+        
+        # 备注
+        self.description_edit = QLineEdit()
+        
+        other_layout.addRow("备注:", self.description_edit)
+        
+        other_info_group.setLayout(other_layout)
+        layout.addWidget(other_info_group)
+        
+        # 按钮
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def load_income_categories(self):
+        categories = self.db_manager.get_categories("收入")
+        
+        # 按主类别分组
+        income_categories = {}
+        for parent, sub in categories:
+            if parent not in income_categories:
+                income_categories[parent] = []
+            income_categories[parent].append(sub)
+        
+        # 创建主类别按钮 - 使用网格布局
+        from PyQt6.QtWidgets import QGridLayout
+        
+        # 收入类别行
+        income_row_widget = QWidget()
+        income_row_layout = QHBoxLayout()
+        income_row_layout.setSpacing(5)
+        income_row_layout.setContentsMargins(0, 0, 0, 0)
+        
+        for category in income_categories.keys():
+            btn = CategoryButton(category, "income")
+            btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
+            income_row_layout.addWidget(btn)
+        
+        income_row_layout.addStretch()
+        income_row_widget.setLayout(income_row_layout)
+        self.main_category_grid_layout.addWidget(income_row_widget)
+        
+        # 存储子类别数据
+        self.subcategories = income_categories
+    
+    def load_accounts(self):
+        accounts = self.db_manager.get_accounts()
+        self.account_combo.addItem("")
+        for account in accounts:
+            self.account_combo.addItem(account[1])
+    
+    def load_transaction_data(self):
+        if self.transaction_data:
+            (trans_id, ledger_id, transaction_date, transaction_type, category, subcategory, 
+             amount, account, description, is_settled, refund_amount, 
+             refund_reason, created_time) = self.transaction_data
+            
+            self.date_edit.setDate(QDate.fromString(transaction_date, "yyyy-MM-dd"))
+            self.amount_spin.setValue(abs(amount))
+            self.account_combo.setCurrentText(account or "")
+            self.description_edit.setText(description or "")
+            
+            # 设置类别
+            if category:
+                self.selected_category = category
+                self.show_subcategories(category)
+                # 设置子类别
+                if subcategory:
+                    self.selected_subcategory = subcategory
+    
+    def on_main_category_clicked(self, category):
+        # 清除之前的选择
+        for i in range(self.main_category_grid_layout.count()):
+            row_widget = self.main_category_grid_layout.itemAt(i).widget()
+            if row_widget:
+                for j in range(row_widget.layout().count()):
+                    widget = row_widget.layout().itemAt(j).widget()
+                    if isinstance(widget, CategoryButton):
+                        widget.set_selected(False)
+        
+        # 设置当前选择
+        sender = self.sender()
+        if isinstance(sender, CategoryButton):
+            sender.set_selected(True)
+            self.selected_category = category
+            
+            # 显示子类别
+            self.show_subcategories(category)
+    
+    def show_subcategories(self, category):
+        # 清除之前的子类别按钮
+        for i in reversed(range(self.subcategory_grid_layout.count())):
+            child = self.subcategory_grid_layout.itemAt(i).widget()
+            if child:
+                child.setParent(None)
+        
+        # 添加新的子类别按钮 - 使用横向布局
+        if category in self.subcategories:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(5)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            
+            for subcategory in self.subcategories[category]:
+                btn = CategoryButton(subcategory, "normal")
+                btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
+                row_layout.addWidget(btn)
+            
+            row_layout.addStretch()
+            row_widget.setLayout(row_layout)
+            self.subcategory_grid_layout.addWidget(row_widget)
+        
+        # 显示子类别区域
+        self.subcategory_label.setVisible(True)
+        self.subcategory_scroll.setVisible(True)
+    
+    def on_subcategory_clicked(self, subcategory):
+        # 清除之前的选择
+        for i in range(self.subcategory_grid_layout.count()):
+            row_widget = self.subcategory_grid_layout.itemAt(i).widget()
+            if row_widget:
+                for j in range(row_widget.layout().count()):
+                    widget = row_widget.layout().itemAt(j).widget()
+                    if isinstance(widget, CategoryButton):
+                        widget.set_selected(False)
+        
+        # 设置当前选择
+        sender = self.sender()
+        if isinstance(sender, CategoryButton):
+            sender.set_selected(True)
+            self.selected_subcategory = subcategory
+    
+    def get_data(self):
+        return {
+            'id': self.transaction_data[0] if self.transaction_data else None,
+            'transaction_date': self.date_edit.date().toString("yyyy-MM-dd"),
+            'transaction_type': self.transaction_type,
+            'category': self.selected_category or "",
+            'subcategory': self.selected_subcategory or "",
+            'amount': self.amount_spin.value(),
+            'account': self.account_combo.currentText(),
+            'description': self.description_edit.text(),
+            'is_settled': False,
+            'refund_amount': 0.0,
+            'refund_reason': ""
+        }
+
 class AddIncomeDialog(QDialog):
     def __init__(self, db_manager, ledger_id, parent=None):
         super().__init__(parent)
@@ -988,6 +1272,267 @@ class AddIncomeDialog(QDialog):
             'is_settled': False,
             'refund_amount': 0.0,
             'refund_reason': ""
+        }
+
+class EditExpenseDialog(QDialog):
+    def __init__(self, db_manager, transaction_data, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.transaction_data = transaction_data
+        self.setWindowTitle("编辑支出记录")
+        self.setModal(True)
+        self.selected_category = None
+        self.selected_subcategory = None
+        self.transaction_type = "支出"
+        self.setup_ui()
+        self.load_expense_categories()
+        self.load_transaction_data()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 基本信息区域
+        basic_info_group = QGroupBox("基本信息")
+        basic_layout = QFormLayout()
+        
+        # 交易时间
+        self.date_edit = QDateTimeEdit()
+        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+        
+        # 金额
+        self.amount_spin = QDoubleSpinBox()
+        self.amount_spin.setRange(0, 999999.99)
+        self.amount_spin.setDecimals(2)
+        self.amount_spin.setPrefix("¥")
+        
+        # 账户
+        self.account_combo = QComboBox()
+        self.load_accounts()
+        
+        basic_layout.addRow("交易时间:", self.date_edit)
+        basic_layout.addRow("金额:", self.amount_spin)
+        basic_layout.addRow("账户:", self.account_combo)
+        
+        basic_info_group.setLayout(basic_layout)
+        layout.addWidget(basic_info_group)
+        
+        # 类别选择区域
+        category_group = QGroupBox("支出类别选择")
+        category_layout = QVBoxLayout()
+        
+        # 主类别卡片区域
+        main_category_label = QLabel("主类别:")
+        main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        category_layout.addWidget(main_category_label)
+        
+        # 创建滚动区域
+        self.main_category_scroll = QScrollArea()
+        self.main_category_scroll.setWidgetResizable(True)
+        self.main_category_scroll.setMaximumHeight(80)
+        self.main_category_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.main_category_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.main_category_content = QWidget()
+        self.main_category_grid_layout = QVBoxLayout()
+        self.main_category_content.setLayout(self.main_category_grid_layout)
+        self.main_category_scroll.setWidget(self.main_category_content)
+        
+        category_layout.addWidget(self.main_category_scroll)
+        
+        # 子类别卡片区域
+        self.subcategory_label = QLabel("子类别:")
+        self.subcategory_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.subcategory_label.setVisible(False)
+        category_layout.addWidget(self.subcategory_label)
+        
+        self.subcategory_scroll = QScrollArea()
+        self.subcategory_scroll.setWidgetResizable(True)
+        self.subcategory_scroll.setMaximumHeight(60)
+        self.subcategory_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.subcategory_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        self.subcategory_content = QWidget()
+        self.subcategory_grid_layout = QVBoxLayout()
+        self.subcategory_content.setLayout(self.subcategory_grid_layout)
+        self.subcategory_scroll.setWidget(self.subcategory_content)
+        self.subcategory_scroll.setVisible(False)
+        
+        category_layout.addWidget(self.subcategory_scroll)
+        
+        category_group.setLayout(category_layout)
+        layout.addWidget(category_group)
+        
+        # 其他信息区域
+        other_info_group = QGroupBox("其他信息")
+        other_layout = QFormLayout()
+        
+        # 备注
+        self.description_edit = QLineEdit()
+        
+        # 销账标记
+        self.settled_check = QCheckBox("已销账")
+        
+        # 退款信息
+        self.refund_amount_spin = QDoubleSpinBox()
+        self.refund_amount_spin.setRange(0, 999999.99)
+        self.refund_amount_spin.setDecimals(2)
+        self.refund_amount_spin.setPrefix("¥")
+        self.refund_reason_edit = QLineEdit()
+        
+        other_layout.addRow("备注:", self.description_edit)
+        other_layout.addRow("", self.settled_check)
+        other_layout.addRow("退款金额:", self.refund_amount_spin)
+        other_layout.addRow("退款原因:", self.refund_reason_edit)
+        
+        other_info_group.setLayout(other_layout)
+        layout.addWidget(other_info_group)
+        
+        # 按钮
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def load_expense_categories(self):
+        categories = self.db_manager.get_categories("支出")
+        
+        # 按主类别分组
+        expense_categories = {}
+        for parent, sub in categories:
+            if parent not in expense_categories:
+                expense_categories[parent] = []
+            expense_categories[parent].append(sub)
+        
+        # 创建主类别按钮 - 使用网格布局
+        from PyQt6.QtWidgets import QGridLayout
+        
+        # 支出类别行
+        expense_row_widget = QWidget()
+        expense_row_layout = QHBoxLayout()
+        expense_row_layout.setSpacing(5)
+        expense_row_layout.setContentsMargins(0, 0, 0, 0)
+        
+        for category in expense_categories.keys():
+            btn = CategoryButton(category, "expense")
+            btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
+            expense_row_layout.addWidget(btn)
+        
+        expense_row_layout.addStretch()
+        expense_row_widget.setLayout(expense_row_layout)
+        self.main_category_grid_layout.addWidget(expense_row_widget)
+        
+        # 存储子类别数据
+        self.subcategories = expense_categories
+    
+    def load_accounts(self):
+        accounts = self.db_manager.get_accounts()
+        self.account_combo.addItem("")
+        for account in accounts:
+            self.account_combo.addItem(account[1])
+    
+    def load_transaction_data(self):
+        if self.transaction_data:
+            (trans_id, ledger_id, transaction_date, transaction_type, category, subcategory, 
+             amount, account, description, is_settled, refund_amount, 
+             refund_reason, created_time) = self.transaction_data
+            
+            self.date_edit.setDate(QDate.fromString(transaction_date, "yyyy-MM-dd"))
+            self.amount_spin.setValue(abs(amount))
+            self.account_combo.setCurrentText(account or "")
+            self.description_edit.setText(description or "")
+            self.settled_check.setChecked(is_settled)
+            self.refund_amount_spin.setValue(refund_amount)
+            self.refund_reason_edit.setText(refund_reason or "")
+            
+            # 设置类别
+            if category:
+                self.selected_category = category
+                self.show_subcategories(category)
+                # 设置子类别
+                if subcategory:
+                    self.selected_subcategory = subcategory
+    
+    def on_main_category_clicked(self, category):
+        # 清除之前的选择
+        for i in range(self.main_category_grid_layout.count()):
+            row_widget = self.main_category_grid_layout.itemAt(i).widget()
+            if row_widget:
+                for j in range(row_widget.layout().count()):
+                    widget = row_widget.layout().itemAt(j).widget()
+                    if isinstance(widget, CategoryButton):
+                        widget.set_selected(False)
+        
+        # 设置当前选择
+        sender = self.sender()
+        if isinstance(sender, CategoryButton):
+            sender.set_selected(True)
+            self.selected_category = category
+            
+            # 显示子类别
+            self.show_subcategories(category)
+    
+    def show_subcategories(self, category):
+        # 清除之前的子类别按钮
+        for i in reversed(range(self.subcategory_grid_layout.count())):
+            child = self.subcategory_grid_layout.itemAt(i).widget()
+            if child:
+                child.setParent(None)
+        
+        # 添加新的子类别按钮 - 使用横向布局
+        if category in self.subcategories:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(5)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            
+            for subcategory in self.subcategories[category]:
+                btn = CategoryButton(subcategory, "normal")
+                btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
+                row_layout.addWidget(btn)
+            
+            row_layout.addStretch()
+            row_widget.setLayout(row_layout)
+            self.subcategory_grid_layout.addWidget(row_widget)
+        
+        # 显示子类别区域
+        self.subcategory_label.setVisible(True)
+        self.subcategory_scroll.setVisible(True)
+    
+    def on_subcategory_clicked(self, subcategory):
+        # 清除之前的选择
+        for i in range(self.subcategory_grid_layout.count()):
+            row_widget = self.subcategory_grid_layout.itemAt(i).widget()
+            if row_widget:
+                for j in range(row_widget.layout().count()):
+                    widget = row_widget.layout().itemAt(j).widget()
+                    if isinstance(widget, CategoryButton):
+                        widget.set_selected(False)
+        
+        # 设置当前选择
+        sender = self.sender()
+        if isinstance(sender, CategoryButton):
+            sender.set_selected(True)
+            self.selected_subcategory = subcategory
+    
+    def get_data(self):
+        return {
+            'id': self.transaction_data[0] if self.transaction_data else None,
+            'transaction_date': self.date_edit.date().toString("yyyy-MM-dd"),
+            'transaction_type': self.transaction_type,
+            'category': self.selected_category or "",
+            'subcategory': self.selected_subcategory or "",
+            'amount': -self.amount_spin.value(),  # 支出为负数
+            'account': self.account_combo.currentText(),
+            'description': self.description_edit.text(),
+            'is_settled': self.settled_check.isChecked(),
+            'refund_amount': self.refund_amount_spin.value(),
+            'refund_reason': self.refund_reason_edit.text()
         }
 
 class AddExpenseDialog(QDialog):
@@ -1237,6 +1782,67 @@ class AddExpenseDialog(QDialog):
             'refund_reason': self.refund_reason_edit.text()
         }
 
+class EditAccountDialog(QDialog):
+    def __init__(self, account_data, parent=None):
+        super().__init__(parent)
+        self.account_data = account_data
+        self.setWindowTitle("编辑账户")
+        self.setModal(True)
+        self.setup_ui()
+        self.load_account_data()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+        
+        self.name_edit = QLineEdit()
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["现金", "银行卡", "电子支付", "其他"])
+        self.bank_edit = QLineEdit()
+        self.balance_spin = QDoubleSpinBox()
+        self.balance_spin.setRange(0, 999999.99)
+        self.balance_spin.setDecimals(2)
+        self.balance_spin.setPrefix("¥")
+        self.description_edit = QTextEdit()
+        self.description_edit.setMaximumHeight(80)
+        
+        form_layout.addRow("账户名称:", self.name_edit)
+        form_layout.addRow("账户类型:", self.type_combo)
+        form_layout.addRow("开户行:", self.bank_edit)
+        form_layout.addRow("初始余额:", self.balance_spin)
+        form_layout.addRow("备注:", self.description_edit)
+        
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(form_layout)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def load_account_data(self):
+        if self.account_data:
+            (account_id, name, account_type, balance, bank, description) = self.account_data
+            self.name_edit.setText(name)
+            self.type_combo.setCurrentText(account_type)
+            self.bank_edit.setText(bank or "")
+            self.balance_spin.setValue(balance)
+            self.description_edit.setPlainText(description or "")
+    
+    def get_data(self):
+        return {
+            'id': self.account_data[0] if self.account_data else None,
+            'name': self.name_edit.text(),
+            'type': self.type_combo.currentText(),
+            'bank': self.bank_edit.text(),
+            'balance': self.balance_spin.value(),
+            'description': self.description_edit.toPlainText()
+        }
+
 class AddAccountDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1378,7 +1984,13 @@ class AssetManagementWidget(QWidget):
         account_btn_layout = QHBoxLayout()
         add_account_btn = QPushButton("添加账户")
         add_account_btn.clicked.connect(self.add_account)
+        edit_account_btn = QPushButton("编辑账户")
+        edit_account_btn.clicked.connect(self.edit_account)
+        delete_account_btn = QPushButton("删除账户")
+        delete_account_btn.clicked.connect(self.delete_account)
         account_btn_layout.addWidget(add_account_btn)
+        account_btn_layout.addWidget(edit_account_btn)
+        account_btn_layout.addWidget(delete_account_btn)
         account_btn_layout.addStretch()
         account_layout.addLayout(account_btn_layout)
         
@@ -1455,6 +2067,71 @@ class AssetManagementWidget(QWidget):
                 if parent and hasattr(parent, 'statistics_widget'):
                     parent.statistics_widget.update_statistics()
                 QMessageBox.information(self, "成功", "账户添加成功！")
+    
+    def edit_account(self):
+        current_row = self.account_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "警告", "请先选择要编辑的账户！")
+            return
+        
+        # 获取选中的账户数据
+        account_name = self.account_table.item(current_row, 0).text()
+        accounts = self.db_manager.get_accounts()
+        account_data = None
+        for account in accounts:
+            if account[1] == account_name:
+                account_data = account
+                break
+        
+        if not account_data:
+            QMessageBox.warning(self, "警告", "找不到选中的账户数据！")
+            return
+        
+        dialog = EditAccountDialog(account_data, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if data['name']:
+                self.db_manager.update_account(
+                    data['id'], data['name'], data['type'], data['balance'],
+                    data['bank'], data['description']
+                )
+                self.load_accounts()
+                # 刷新统计页面
+                parent = self.parent()
+                if parent and hasattr(parent, 'statistics_widget'):
+                    parent.statistics_widget.update_statistics()
+                QMessageBox.information(self, "成功", "账户修改成功！")
+    
+    def delete_account(self):
+        current_row = self.account_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "警告", "请先选择要删除的账户！")
+            return
+        
+        account_name = self.account_table.item(current_row, 0).text()
+        accounts = self.db_manager.get_accounts()
+        account_data = None
+        for account in accounts:
+            if account[1] == account_name:
+                account_data = account
+                break
+        
+        if not account_data:
+            QMessageBox.warning(self, "警告", "找不到选中的账户数据！")
+            return
+        
+        reply = QMessageBox.question(self, "确认删除", 
+                                   f"确定要删除账户 '{account_name}' 吗？删除后将无法恢复！",
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.db_manager.delete_account(account_data[0])
+            self.load_accounts()
+            # 刷新统计页面
+            parent = self.parent()
+            if parent and hasattr(parent, 'statistics_widget'):
+                parent.statistics_widget.update_statistics()
+            QMessageBox.information(self, "成功", "账户删除成功！")
     
     def add_transfer(self):
         dialog = TransferDialog(self.db_manager, self)
@@ -2089,6 +2766,40 @@ class MainWindow(QMainWindow):
         
         transaction_btn_layout.addWidget(add_income_btn)
         transaction_btn_layout.addWidget(add_expense_btn)
+        edit_transaction_btn = QPushButton("编辑记录")
+        edit_transaction_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        edit_transaction_btn.clicked.connect(self.edit_transaction)
+        delete_transaction_btn = QPushButton("删除记录")
+        delete_transaction_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9E9E9E;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #757575;
+            }
+        """)
+        delete_transaction_btn.clicked.connect(self.delete_transaction)
+        transaction_btn_layout.addWidget(edit_transaction_btn)
+        transaction_btn_layout.addWidget(delete_transaction_btn)
         transaction_btn_layout.addStretch()
         transaction_layout.addLayout(transaction_btn_layout)
         
@@ -2266,6 +2977,107 @@ class MainWindow(QMainWindow):
                     break
             else:
                 break
+    
+    def edit_transaction(self):
+        if not self.current_ledger_id:
+            QMessageBox.warning(self, "警告", "请先选择账本！")
+            return
+        
+        current_row = self.transaction_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "警告", "请先选择要编辑的交易记录！")
+            return
+        
+        # 获取选中的交易记录数据
+        transactions = self.db_manager.get_transactions(self.current_ledger_id)
+        if current_row >= len(transactions):
+            QMessageBox.warning(self, "警告", "找不到选中的交易记录！")
+            return
+        
+        transaction_data = transactions[current_row]
+        transaction_type = transaction_data[3]
+        
+        if transaction_type == "收入":
+            dialog = EditIncomeDialog(self.db_manager, transaction_data, self)
+        elif transaction_type == "支出":
+            dialog = EditExpenseDialog(self.db_manager, transaction_data, self)
+        else:
+            QMessageBox.warning(self, "警告", "未知的交易类型！")
+            return
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if data['category'] and data['subcategory']:
+                # 计算余额变化
+                old_amount = transaction_data[6]
+                new_amount = data['amount']
+                balance_change = new_amount - old_amount
+                
+                self.db_manager.update_transaction(
+                    data['id'], data['transaction_date'], data['transaction_type'],
+                    data['category'], data['subcategory'], data['amount'], data['account'], data['description'],
+                    data['is_settled'], data['refund_amount'], data['refund_reason']
+                )
+                self.load_transactions()
+                
+                # 更新账户余额
+                if data['account']:
+                    self.db_manager.update_account_balance(data['account'], balance_change)
+                
+                QMessageBox.information(self, "成功", "交易记录修改成功！")
+                # 刷新相关页面
+                if hasattr(self, 'asset_widget'):
+                    self.asset_widget.load_accounts()
+                if hasattr(self, 'statistics_widget'):
+                    self.statistics_widget.update_statistics()
+    
+    def delete_transaction(self):
+        if not self.current_ledger_id:
+            QMessageBox.warning(self, "警告", "请先选择账本！")
+            return
+        
+        current_row = self.transaction_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "警告", "请先选择要删除的交易记录！")
+            return
+        
+        # 获取选中的交易记录数据
+        transactions = self.db_manager.get_transactions(self.current_ledger_id)
+        if current_row >= len(transactions):
+            QMessageBox.warning(self, "警告", "找不到选中的交易记录！")
+            return
+        
+        transaction_data = transactions[current_row]
+        transaction_date = transaction_data[2]
+        transaction_type = transaction_data[3]
+        category = transaction_data[4]
+        subcategory = transaction_data[5]
+        amount = transaction_data[6]
+        account = transaction_data[7]
+        
+        reply = QMessageBox.question(self, "确认删除", 
+                                   f"确定要删除这条交易记录吗？"
+                                   f"日期: {transaction_date}"
+                                   f"类型: {transaction_type}"
+                                   f"类别: {category} - {subcategory}"
+                                   f"金额: ¥{abs(amount):.2f}"
+                                   f"删除后将无法恢复！",
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.db_manager.delete_transaction(transaction_data[0])
+            self.load_transactions()
+            
+            # 更新账户余额（删除记录需要反向操作）
+            if account:
+                self.db_manager.update_account_balance(account, -amount)
+            
+            QMessageBox.information(self, "成功", "交易记录删除成功！")
+            # 刷新相关页面
+            if hasattr(self, 'asset_widget'):
+                self.asset_widget.load_accounts()
+            if hasattr(self, 'statistics_widget'):
+                self.statistics_widget.update_statistics()
 
 def main():
     app = QApplication(sys.argv)
