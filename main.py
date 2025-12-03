@@ -57,6 +57,7 @@ class DatabaseManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ledger_id INTEGER NOT NULL,
                 transaction_date TEXT NOT NULL,
+                transaction_type TEXT NOT NULL,
                 category TEXT NOT NULL,
                 subcategory TEXT NOT NULL,
                 amount REAL NOT NULL,
@@ -165,17 +166,17 @@ class DatabaseManager:
         conn.close()
         return categories
     
-    def add_transaction(self, ledger_id, transaction_date, category, subcategory, 
+    def add_transaction(self, ledger_id, transaction_date, transaction_type, category, subcategory, 
                        amount, account, description, is_settled, refund_amount, refund_reason):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute('''
             INSERT INTO transactions 
-            (ledger_id, transaction_date, category, subcategory, amount, account, 
+            (ledger_id, transaction_date, transaction_type, category, subcategory, amount, account, 
              description, is_settled, refund_amount, refund_reason, created_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (ledger_id, transaction_date, category, subcategory, amount, account,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (ledger_id, transaction_date, transaction_type, category, subcategory, amount, account,
               description, is_settled, refund_amount, refund_reason, created_time))
         conn.commit()
         conn.close()
@@ -326,6 +327,7 @@ class AddTransactionDialog(QDialog):
         self.setModal(True)
         self.selected_category = None
         self.selected_subcategory = None
+        self.selected_transaction_type = None
         self.setup_ui()
         self.load_categories()
     
@@ -341,6 +343,60 @@ class AddTransactionDialog(QDialog):
         self.date_edit.setDateTime(QDateTime.currentDateTime())
         self.date_edit.setDisplayFormat("yyyy-MM-dd")
         
+        # 收支类型选择
+        self.transaction_type_widget = QWidget()
+        transaction_type_layout = QHBoxLayout()
+        transaction_type_layout.setSpacing(10)
+        
+        self.income_btn = QPushButton("收入")
+        self.income_btn.setCheckable(True)
+        self.income_btn.clicked.connect(lambda: self.set_transaction_type("收入"))
+        self.income_btn.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #4CAF50;
+                border-radius: 8px;
+                padding: 10px 20px;
+                background-color: white;
+                color: #4CAF50;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #E8F5E8;
+            }
+            QPushButton:checked {
+                background-color: #4CAF50;
+                color: white;
+            }
+        """)
+        
+        self.expense_btn = QPushButton("支出")
+        self.expense_btn.setCheckable(True)
+        self.expense_btn.clicked.connect(lambda: self.set_transaction_type("支出"))
+        self.expense_btn.setStyleSheet("""
+            QPushButton {
+                border: 2px solid #FF6B6B;
+                border-radius: 8px;
+                padding: 10px 20px;
+                background-color: white;
+                color: #FF6B6B;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #FFE0E0;
+            }
+            QPushButton:checked {
+                background-color: #FF6B6B;
+                color: white;
+            }
+        """)
+        
+        transaction_type_layout.addWidget(self.income_btn)
+        transaction_type_layout.addWidget(self.expense_btn)
+        transaction_type_layout.addStretch()
+        self.transaction_type_widget.setLayout(transaction_type_layout)
+        
         # 金额
         self.amount_spin = QDoubleSpinBox()
         self.amount_spin.setRange(-999999.99, 999999.99)
@@ -352,6 +408,7 @@ class AddTransactionDialog(QDialog):
         self.load_accounts()
         
         basic_layout.addRow("交易时间:", self.date_edit)
+        basic_layout.addRow("收支类型:", self.transaction_type_widget)
         basic_layout.addRow("金额:", self.amount_spin)
         basic_layout.addRow("账户:", self.account_combo)
         
@@ -454,67 +511,57 @@ class AddTransactionDialog(QDialog):
         layout.addLayout(button_layout)
         self.setLayout(layout)
     
-    def load_categories(self):
-        categories = self.db_manager.get_categories()
+    def set_transaction_type(self, transaction_type):
+        self.selected_transaction_type = transaction_type
+        if transaction_type == "收入":
+            self.income_btn.setChecked(True)
+            self.expense_btn.setChecked(False)
+            self.amount_spin.setPrefix("¥+")
+        else:
+            self.income_btn.setChecked(False)
+            self.expense_btn.setChecked(True)
+            self.amount_spin.setPrefix("¥-")
         
-        # 按类型分组
-        expense_categories = {}
-        income_categories = {}
+        # 重新加载类别
+        self.load_categories_by_type(transaction_type)
+    
+    def load_categories(self):
+        # 初始时不加载类别，等待用户选择收支类型
+        pass
+    
+    def load_categories_by_type(self, transaction_type):
+        # 清除现有类别按钮
+        for i in reversed(range(self.main_category_grid_layout.count())):
+            child = self.main_category_grid_layout.itemAt(i).widget()
+            if child:
+                child.setParent(None)
+        
+        categories = self.db_manager.get_categories(transaction_type)
+        category_dict = {}
         
         for parent, sub in categories:
-            # 获取类别类型
-            conn = sqlite3.connect(self.db_manager.db_path)
-            cursor = conn.cursor()
-            cursor.execute('SELECT type FROM categories WHERE parent_category = ? AND sub_category = ? LIMIT 1', 
-                         (parent, sub))
-            result = cursor.fetchone()
-            category_type = result[0] if result else "支出"
-            conn.close()
-            
-            if category_type == "支出":
-                if parent not in expense_categories:
-                    expense_categories[parent] = []
-                expense_categories[parent].append(sub)
-            else:
-                if parent not in income_categories:
-                    income_categories[parent] = []
-                income_categories[parent].append(sub)
+            if parent not in category_dict:
+                category_dict[parent] = []
+            category_dict[parent].append(sub)
         
-        # 创建主类别按钮 - 使用网格布局
-        from PyQt6.QtWidgets import QGridLayout
+        # 创建主类别按钮
+        row_widget = QWidget()
+        row_layout = QHBoxLayout()
+        row_layout.setSpacing(5)
+        row_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 收入类别行
-        income_row_widget = QWidget()
-        income_row_layout = QHBoxLayout()
-        income_row_layout.setSpacing(5)
-        income_row_layout.setContentsMargins(0, 0, 0, 0)
-        
-        for category in income_categories.keys():
-            btn = CategoryButton(category, "income")
+        button_type = "income" if transaction_type == "收入" else "expense"
+        for category in category_dict.keys():
+            btn = CategoryButton(category, button_type)
             btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
-            income_row_layout.addWidget(btn)
+            row_layout.addWidget(btn)
         
-        income_row_layout.addStretch()
-        income_row_widget.setLayout(income_row_layout)
-        self.main_category_grid_layout.addWidget(income_row_widget)
-        
-        # 支出类别行
-        expense_row_widget = QWidget()
-        expense_row_layout = QHBoxLayout()
-        expense_row_layout.setSpacing(5)
-        expense_row_layout.setContentsMargins(0, 0, 0, 0)
-        
-        for category in expense_categories.keys():
-            btn = CategoryButton(category, "expense")
-            btn.clicked.connect(lambda checked, cat=category: self.on_main_category_clicked(cat))
-            expense_row_layout.addWidget(btn)
-        
-        expense_row_layout.addStretch()
-        expense_row_widget.setLayout(expense_row_layout)
-        self.main_category_grid_layout.addWidget(expense_row_widget)
+        row_layout.addStretch()
+        row_widget.setLayout(row_layout)
+        self.main_category_grid_layout.addWidget(row_widget)
         
         # 存储子类别数据
-        self.subcategories = {**expense_categories, **income_categories}
+        self.subcategories = category_dict
     
     def load_accounts(self):
         accounts = self.db_manager.get_accounts()
@@ -587,6 +634,7 @@ class AddTransactionDialog(QDialog):
     def get_data(self):
         return {
             'transaction_date': self.date_edit.date().toString("yyyy-MM-dd"),
+            'transaction_type': self.selected_transaction_type or "",
             'category': self.selected_category or "",
             'subcategory': self.selected_subcategory or "",
             'amount': self.amount_spin.value(),
@@ -679,9 +727,9 @@ class MainWindow(QMainWindow):
         
         # 交易记录表格
         self.transaction_table = QTableWidget()
-        self.transaction_table.setColumnCount(10)
+        self.transaction_table.setColumnCount(11)
         self.transaction_table.setHorizontalHeaderLabels([
-            "日期", "主类别", "子类别", "金额", "账户", "备注", "销账", "退款金额", "退款原因", "创建时间"
+            "日期", "类型", "主类别", "子类别", "金额", "账户", "备注", "销账", "退款金额", "退款原因", "创建时间"
         ])
         self.transaction_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self.transaction_table)
@@ -723,20 +771,21 @@ class MainWindow(QMainWindow):
         self.transaction_table.setRowCount(len(transactions))
         
         for row, transaction in enumerate(transactions):
-            (trans_id, ledger_id, transaction_date, category, subcategory, 
+            (trans_id, ledger_id, transaction_date, transaction_type, category, subcategory, 
              amount, account, description, is_settled, refund_amount, 
              refund_reason, created_time) = transaction
             
             self.transaction_table.setItem(row, 0, QTableWidgetItem(transaction_date))
-            self.transaction_table.setItem(row, 1, QTableWidgetItem(category))
-            self.transaction_table.setItem(row, 2, QTableWidgetItem(subcategory))
-            self.transaction_table.setItem(row, 3, QTableWidgetItem(f"¥{amount:.2f}"))
-            self.transaction_table.setItem(row, 4, QTableWidgetItem(account or ""))
-            self.transaction_table.setItem(row, 5, QTableWidgetItem(description or ""))
-            self.transaction_table.setItem(row, 6, QTableWidgetItem("是" if is_settled else "否"))
-            self.transaction_table.setItem(row, 7, QTableWidgetItem(f"¥{refund_amount:.2f}" if refund_amount > 0 else ""))
-            self.transaction_table.setItem(row, 8, QTableWidgetItem(refund_reason or ""))
-            self.transaction_table.setItem(row, 9, QTableWidgetItem(created_time))
+            self.transaction_table.setItem(row, 1, QTableWidgetItem(transaction_type))
+            self.transaction_table.setItem(row, 2, QTableWidgetItem(category))
+            self.transaction_table.setItem(row, 3, QTableWidgetItem(subcategory))
+            self.transaction_table.setItem(row, 4, QTableWidgetItem(f"¥{amount:.2f}"))
+            self.transaction_table.setItem(row, 5, QTableWidgetItem(account or ""))
+            self.transaction_table.setItem(row, 6, QTableWidgetItem(description or ""))
+            self.transaction_table.setItem(row, 7, QTableWidgetItem("是" if is_settled else "否"))
+            self.transaction_table.setItem(row, 8, QTableWidgetItem(f"¥{refund_amount:.2f}" if refund_amount > 0 else ""))
+            self.transaction_table.setItem(row, 9, QTableWidgetItem(refund_reason or ""))
+            self.transaction_table.setItem(row, 10, QTableWidgetItem(created_time))
     
     def add_ledger(self):
         dialog = AddLedgerDialog(self)
@@ -777,10 +826,10 @@ class MainWindow(QMainWindow):
         dialog = AddTransactionDialog(self.db_manager, self.current_ledger_id, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             data = dialog.get_data()
-            if data['category'] and data['subcategory'] and data['amount'] != 0:
+            if data['transaction_type'] and data['category'] and data['subcategory'] and data['amount'] != 0:
                 self.db_manager.add_transaction(
-                    self.current_ledger_id, data['transaction_date'], data['category'],
-                    data['subcategory'], data['amount'], data['account'], data['description'],
+                    self.current_ledger_id, data['transaction_date'], data['transaction_type'],
+                    data['category'], data['subcategory'], data['amount'], data['account'], data['description'],
                     data['is_settled'], data['refund_amount'], data['refund_reason']
                 )
                 self.load_transactions()
