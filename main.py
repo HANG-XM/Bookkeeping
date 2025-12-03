@@ -996,13 +996,16 @@ class EditIncomeDialog(QDialog):
             row_layout.setContentsMargins(0, 0, 0, 0)
             
             for subcategory in self.subcategories[category]:
-                btn = CategoryButton(subcategory, "normal")
+                btn = CategoryButton(subcategory, "expense")
                 btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
                 row_layout.addWidget(btn)
             
             row_layout.addStretch()
             row_widget.setLayout(row_layout)
             self.subcategory_grid_layout.addWidget(row_widget)
+        
+        # 确保子类别内容被正确设置到滚动区域
+        self.subcategory_scroll.setWidget(self.subcategory_content)
         
         # 显示子类别区域
         self.subcategory_label.setVisible(True)
@@ -1228,13 +1231,16 @@ class AddIncomeDialog(QDialog):
             row_layout.setContentsMargins(0, 0, 0, 0)
             
             for subcategory in self.subcategories[category]:
-                btn = CategoryButton(subcategory, "normal")
+                btn = CategoryButton(subcategory, "expense")
                 btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
                 row_layout.addWidget(btn)
             
             row_layout.addStretch()
             row_widget.setLayout(row_layout)
             self.subcategory_grid_layout.addWidget(row_widget)
+        
+        # 确保子类别内容被正确设置到滚动区域
+        self.subcategory_scroll.setWidget(self.subcategory_content)
         
         # 显示子类别区域
         self.subcategory_label.setVisible(True)
@@ -1492,13 +1498,16 @@ class EditExpenseDialog(QDialog):
             row_layout.setContentsMargins(0, 0, 0, 0)
             
             for subcategory in self.subcategories[category]:
-                btn = CategoryButton(subcategory, "normal")
+                btn = CategoryButton(subcategory, "expense")
                 btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
                 row_layout.addWidget(btn)
             
             row_layout.addStretch()
             row_widget.setLayout(row_layout)
             self.subcategory_grid_layout.addWidget(row_widget)
+        
+        # 确保子类别内容被正确设置到滚动区域
+        self.subcategory_scroll.setWidget(self.subcategory_content)
         
         # 显示子类别区域
         self.subcategory_label.setVisible(True)
@@ -1736,13 +1745,16 @@ class AddExpenseDialog(QDialog):
             row_layout.setContentsMargins(0, 0, 0, 0)
             
             for subcategory in self.subcategories[category]:
-                btn = CategoryButton(subcategory, "normal")
+                btn = CategoryButton(subcategory, "expense")
                 btn.clicked.connect(lambda checked, sub=subcategory: self.on_subcategory_clicked(sub))
                 row_layout.addWidget(btn)
             
             row_layout.addStretch()
             row_widget.setLayout(row_layout)
             self.subcategory_grid_layout.addWidget(row_widget)
+        
+        # 确保子类别内容被正确设置到滚动区域
+        self.subcategory_scroll.setWidget(self.subcategory_content)
         
         # 显示子类别区域
         self.subcategory_label.setVisible(True)
