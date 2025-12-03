@@ -422,14 +422,20 @@ class AddIncomeDialog(QDialog):
         # 按钮
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
+        add_more_button = QPushButton("再记")
         cancel_button = QPushButton("取消")
         ok_button.clicked.connect(self.accept)
+        add_more_button.clicked.connect(self.add_more)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(ok_button)
+        button_layout.addWidget(add_more_button)
         button_layout.addWidget(cancel_button)
         
         layout.addLayout(button_layout)
         self.setLayout(layout)
+        
+        # 标记是否是"再记"操作
+        self.is_add_more = False
     
     def load_income_categories(self):
         categories = self.db_manager.get_categories("收入")
@@ -529,6 +535,10 @@ class AddIncomeDialog(QDialog):
         if isinstance(sender, CategoryButton):
             sender.set_selected(True)
             self.selected_subcategory = subcategory
+    
+    def add_more(self):
+        self.is_add_more = True
+        self.accept()
     
     def get_data(self):
         return {
@@ -660,14 +670,20 @@ class AddExpenseDialog(QDialog):
         # 按钮
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
+        add_more_button = QPushButton("再记")
         cancel_button = QPushButton("取消")
         ok_button.clicked.connect(self.accept)
+        add_more_button.clicked.connect(self.add_more)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(ok_button)
+        button_layout.addWidget(add_more_button)
         button_layout.addWidget(cancel_button)
         
         layout.addLayout(button_layout)
         self.setLayout(layout)
+        
+        # 标记是否是"再记"操作
+        self.is_add_more = False
     
     def load_expense_categories(self):
         categories = self.db_manager.get_categories("支出")
@@ -767,6 +783,10 @@ class AddExpenseDialog(QDialog):
         if isinstance(sender, CategoryButton):
             sender.set_selected(True)
             self.selected_subcategory = subcategory
+    
+    def add_more(self):
+        self.is_add_more = True
+        self.accept()
     
     def get_data(self):
         return {
@@ -994,38 +1014,58 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "警告", "请先选择账本！")
             return
         
-        dialog = AddIncomeDialog(self.db_manager, self.current_ledger_id, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            data = dialog.get_data()
-            if data['category'] and data['subcategory'] and data['amount'] > 0:
-                self.db_manager.add_transaction(
-                    self.current_ledger_id, data['transaction_date'], data['transaction_type'],
-                    data['category'], data['subcategory'], data['amount'], data['account'], data['description'],
-                    data['is_settled'], data['refund_amount'], data['refund_reason']
-                )
-                self.load_transactions()
-                QMessageBox.information(self, "成功", "收入记录添加成功！")
+        while True:
+            dialog = AddIncomeDialog(self.db_manager, self.current_ledger_id, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                data = dialog.get_data()
+                if data['category'] and data['subcategory'] and data['amount'] > 0:
+                    self.db_manager.add_transaction(
+                        self.current_ledger_id, data['transaction_date'], data['transaction_type'],
+                        data['category'], data['subcategory'], data['amount'], data['account'], data['description'],
+                        data['is_settled'], data['refund_amount'], data['refund_reason']
+                    )
+                    self.load_transactions()
+                    
+                    if dialog.is_add_more:
+                        # 继续添加下一条记录
+                        continue
+                    else:
+                        QMessageBox.information(self, "成功", "收入记录添加成功！")
+                        break
+                else:
+                    QMessageBox.warning(self, "警告", "请填写必要的收入信息！")
+                    break
             else:
-                QMessageBox.warning(self, "警告", "请填写必要的收入信息！")
+                break
     
     def add_expense(self):
         if not self.current_ledger_id:
             QMessageBox.warning(self, "警告", "请先选择账本！")
             return
         
-        dialog = AddExpenseDialog(self.db_manager, self.current_ledger_id, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            data = dialog.get_data()
-            if data['category'] and data['subcategory'] and data['amount'] < 0:
-                self.db_manager.add_transaction(
-                    self.current_ledger_id, data['transaction_date'], data['transaction_type'],
-                    data['category'], data['subcategory'], data['amount'], data['account'], data['description'],
-                    data['is_settled'], data['refund_amount'], data['refund_reason']
-                )
-                self.load_transactions()
-                QMessageBox.information(self, "成功", "支出记录添加成功！")
+        while True:
+            dialog = AddExpenseDialog(self.db_manager, self.current_ledger_id, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                data = dialog.get_data()
+                if data['category'] and data['subcategory'] and data['amount'] < 0:
+                    self.db_manager.add_transaction(
+                        self.current_ledger_id, data['transaction_date'], data['transaction_type'],
+                        data['category'], data['subcategory'], data['amount'], data['account'], data['description'],
+                        data['is_settled'], data['refund_amount'], data['refund_reason']
+                    )
+                    self.load_transactions()
+                    
+                    if dialog.is_add_more:
+                        # 继续添加下一条记录
+                        continue
+                    else:
+                        QMessageBox.information(self, "成功", "支出记录添加成功！")
+                        break
+                else:
+                    QMessageBox.warning(self, "警告", "请填写必要的支出信息！")
+                    break
             else:
-                QMessageBox.warning(self, "警告", "请填写必要的支出信息！")
+                break
 
 def main():
     app = QApplication(sys.argv)
