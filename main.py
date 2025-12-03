@@ -2589,7 +2589,7 @@ class StatisticsWidget(QWidget):
         return card
     
     def create_pie_chart(self, figure, data, labels, title, colors=None):
-        """创建饼图"""
+        """创建圆环图"""
         figure.clear()
         ax = figure.add_subplot(111)
         
@@ -2602,14 +2602,19 @@ class StatisticsWidget(QWidget):
         if colors is None:
             colors = plt.cm.Set3(range(len(data)))
         
-        # 创建饼图
+        # 创建圆环图（通过设置wedgeprops来实现）
         wedges, texts, autotexts = ax.pie(data, labels=labels, colors=colors, autopct='%1.1f%%', 
-                                         startangle=90, textprops={'fontsize': 9})
+                                         startangle=90, textprops={'fontsize': 9},
+                                         wedgeprops=dict(width=0.6, edgecolor='white', linewidth=2))
+        
+        # 在中心添加白色圆圈形成圆环效果
+        centre_circle = plt.Circle((0, 0), 0.40, fc='white', linewidth=2, edgecolor='lightgray')
+        ax.add_artist(centre_circle)
         
         # 设置标题
         ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
         
-        # 确保饼图是圆形
+        # 确保圆环图是圆形
         ax.axis('equal')
         
         figure.tight_layout()
