@@ -10,6 +10,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                             QCalendarWidget, QDateEdit, QScrollArea)
 from PyQt6.QtCore import Qt, QDateTime, QDate
 from PyQt6.QtGui import QFont, QIcon
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
+matplotlib.rcParams['axes.unicode_minus'] = False
 
 def number_to_chinese(num):
     """将数字转换为中文大写"""
@@ -1489,65 +1495,62 @@ class StatisticsWidget(QWidget):
         stats_content = QWidget()
         stats_layout = QVBoxLayout()
         
-        # 收支汇总
-        summary_group = QGroupBox("收支汇总")
-        summary_layout = QFormLayout()
+        # 收支汇总卡片
+        summary_cards_layout = QHBoxLayout()
         
-        self.total_income_label = QLabel("¥0.00")
-        self.total_expense_label = QLabel("¥0.00")
-        self.net_income_label = QLabel("¥0.00")
-        self.income_chinese_label = QLabel("")
-        self.expense_chinese_label = QLabel("")
-        self.net_chinese_label = QLabel("")
+        # 总收入卡片
+        income_card = self.create_summary_card("总收入", "#4CAF50", "#E8F5E8")
+        self.income_card_amount = income_card.findChild(QLabel, "card_amount")
+        self.income_card_chinese = income_card.findChild(QLabel, "card_chinese")
+        summary_cards_layout.addWidget(income_card)
         
-        summary_layout.addRow("总收入:", self.total_income_label)
-        summary_layout.addRow("", self.income_chinese_label)
-        summary_layout.addRow("总支出:", self.total_expense_label)
-        summary_layout.addRow("", self.expense_chinese_label)
-        summary_layout.addRow("净收支:", self.net_income_label)
-        summary_layout.addRow("", self.net_chinese_label)
+        # 总支出卡片
+        expense_card = self.create_summary_card("总支出", "#F44336", "#FFEBEE")
+        self.expense_card_amount = expense_card.findChild(QLabel, "card_amount")
+        self.expense_card_chinese = expense_card.findChild(QLabel, "card_chinese")
+        summary_cards_layout.addWidget(expense_card)
         
-        summary_group.setLayout(summary_layout)
-        stats_layout.addWidget(summary_group)
+        # 净收支卡片
+        net_card = self.create_summary_card("净收支", "#2196F3", "#E3F2FD")
+        self.net_card_amount = net_card.findChild(QLabel, "card_amount")
+        self.net_card_chinese = net_card.findChild(QLabel, "card_chinese")
+        summary_cards_layout.addWidget(net_card)
         
-        # 收支结构和账户分布
-        structure_layout = QHBoxLayout()
+        summary_cards_layout.addStretch()
+        stats_layout.addLayout(summary_cards_layout)
         
-        # 收入结构
+        # 收支结构和账户分布图表
+        charts_layout = QHBoxLayout()
+        
+        # 收入结构饼图
         income_structure_group = QGroupBox("收入结构")
-        self.income_structure_table = QTableWidget()
-        self.income_structure_table.setColumnCount(3)
-        self.income_structure_table.setHorizontalHeaderLabels(["类别", "金额", "占比"])
-        self.income_structure_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.income_figure = Figure(figsize=(4, 3))
+        self.income_canvas = FigureCanvas(self.income_figure)
         income_structure_layout = QVBoxLayout()
-        income_structure_layout.addWidget(self.income_structure_table)
+        income_structure_layout.addWidget(self.income_canvas)
         income_structure_group.setLayout(income_structure_layout)
         
-        # 支出结构
+        # 支出结构饼图
         expense_structure_group = QGroupBox("支出结构")
-        self.expense_structure_table = QTableWidget()
-        self.expense_structure_table.setColumnCount(3)
-        self.expense_structure_table.setHorizontalHeaderLabels(["类别", "金额", "占比"])
-        self.expense_structure_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.expense_figure = Figure(figsize=(4, 3))
+        self.expense_canvas = FigureCanvas(self.expense_figure)
         expense_structure_layout = QVBoxLayout()
-        expense_structure_layout.addWidget(self.expense_structure_table)
+        expense_structure_layout.addWidget(self.expense_canvas)
         expense_structure_group.setLayout(expense_structure_layout)
         
-        # 账户分布
+        # 账户分布饼图
         account_distribution_group = QGroupBox("账户分布")
-        self.account_distribution_table = QTableWidget()
-        self.account_distribution_table.setColumnCount(4)
-        self.account_distribution_table.setHorizontalHeaderLabels(["账户", "收入", "支出", "总计"])
-        self.account_distribution_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.account_figure = Figure(figsize=(4, 3))
+        self.account_canvas = FigureCanvas(self.account_figure)
         account_distribution_layout = QVBoxLayout()
-        account_distribution_layout.addWidget(self.account_distribution_table)
+        account_distribution_layout.addWidget(self.account_canvas)
         account_distribution_group.setLayout(account_distribution_layout)
         
-        structure_layout.addWidget(income_structure_group)
-        structure_layout.addWidget(expense_structure_group)
-        structure_layout.addWidget(account_distribution_group)
+        charts_layout.addWidget(income_structure_group)
+        charts_layout.addWidget(expense_structure_group)
+        charts_layout.addWidget(account_distribution_group)
         
-        stats_layout.addLayout(structure_layout)
+        stats_layout.addLayout(charts_layout)
         
         # 核心字段关联统计
         core_stats_layout = QHBoxLayout()
@@ -1714,6 +1717,73 @@ class StatisticsWidget(QWidget):
         self.category_level = "subcategory" if "子类别" in text else "parent"
         self.update_statistics()
     
+    def create_summary_card(self, title, color, bg_color):
+        """创建汇总卡片"""
+        card = QGroupBox()
+        card.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {bg_color};
+                border: 2px solid {color};
+                border-radius: 8px;
+                padding: 10px;
+                font-weight: bold;
+            }}
+        """)
+        card.setFixedWidth(200)
+        card.setFixedHeight(100)
+        
+        layout = QVBoxLayout()
+        
+        # 标题
+        title_label = QLabel(title)
+        title_label.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold;")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 金额
+        amount_label = QLabel("¥0.00")
+        amount_label.setObjectName("card_amount")
+        amount_label.setStyleSheet(f"color: {color}; font-size: 20px; font-weight: bold;")
+        amount_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(amount_label)
+        
+        # 中文大写
+        chinese_label = QLabel("")
+        chinese_label.setObjectName("card_chinese")
+        chinese_label.setStyleSheet(f"color: {color}; font-size: 10px;")
+        chinese_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chinese_label.setWordWrap(True)
+        layout.addWidget(chinese_label)
+        
+        card.setLayout(layout)
+        return card
+    
+    def create_pie_chart(self, figure, data, labels, title, colors=None):
+        """创建饼图"""
+        figure.clear()
+        ax = figure.add_subplot(111)
+        
+        if not data or sum(data) == 0:
+            ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, fontsize=12)
+            ax.set_title(title, fontsize=14, fontweight='bold')
+            return
+        
+        # 设置颜色
+        if colors is None:
+            colors = plt.cm.Set3(range(len(data)))
+        
+        # 创建饼图
+        wedges, texts, autotexts = ax.pie(data, labels=labels, colors=colors, autopct='%1.1f%%', 
+                                         startangle=90, textprops={'fontsize': 9})
+        
+        # 设置标题
+        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+        
+        # 确保饼图是圆形
+        ax.axis('equal')
+        
+        figure.tight_layout()
+    
     def update_statistics(self):
         """更新统计数据"""
         start_date, end_date = self.get_date_range()
@@ -1721,49 +1791,66 @@ class StatisticsWidget(QWidget):
         # 获取收支汇总
         summary = self.db_manager.get_statistics_summary(start_date, end_date)
         
-        self.total_income_label.setText(f"¥{summary['total_income']:.2f}")
-        self.total_expense_label.setText(f"¥{summary['total_expense']:.2f}")
-        self.net_income_label.setText(f"¥{summary['net_income']:.2f}")
+        # 更新卡片显示
+        self.income_card_amount.setText(f"¥{summary['total_income']:.2f}")
+        self.expense_card_amount.setText(f"¥{summary['total_expense']:.2f}")
+        self.net_card_amount.setText(f"¥{summary['net_income']:.2f}")
         
         if self.show_chinese_amount:
-            self.income_chinese_label.setText(number_to_chinese(summary['total_income']))
-            self.expense_chinese_label.setText(number_to_chinese(summary['total_expense']))
-            self.net_chinese_label.setText(number_to_chinese(abs(summary['net_income'])))
+            self.income_card_chinese.setText(number_to_chinese(summary['total_income']))
+            self.expense_card_chinese.setText(number_to_chinese(summary['total_expense']))
+            self.net_card_chinese.setText(number_to_chinese(abs(summary['net_income'])))
         else:
-            self.income_chinese_label.setText("")
-            self.expense_chinese_label.setText("")
-            self.net_chinese_label.setText("")
+            self.income_card_chinese.setText("")
+            self.expense_card_chinese.setText("")
+            self.net_card_chinese.setText("")
         
-        # 更新收入结构
+        # 更新收入结构饼图
         income_stats = self.db_manager.get_category_statistics(start_date, end_date, "收入", self.category_level)
-        self.income_structure_table.setRowCount(len(income_stats))
+        if income_stats and summary['total_income'] > 0:
+            income_labels = [item[0] for item in income_stats]
+            income_data = [item[1] for item in income_stats]
+            # 限制显示前8个类别，其余合并为"其他"
+            if len(income_labels) > 8:
+                other_amount = sum(income_data[8:])
+                income_labels = income_labels[:8] + ["其他"]
+                income_data = income_data[:8] + [other_amount]
+            self.create_pie_chart(self.income_figure, income_data, income_labels, "收入结构")
+        else:
+            self.create_pie_chart(self.income_figure, [], [], "收入结构")
         
-        for i, (category, amount, count) in enumerate(income_stats):
-            ratio = (amount / summary['total_income'] * 100) if summary['total_income'] > 0 else 0
-            self.income_structure_table.setItem(i, 0, QTableWidgetItem(category))
-            self.income_structure_table.setItem(i, 1, QTableWidgetItem(f"¥{amount:.2f}"))
-            self.income_structure_table.setItem(i, 2, QTableWidgetItem(f"{ratio:.1f}%"))
-        
-        # 更新支出结构
+        # 更新支出结构饼图
         expense_stats = self.db_manager.get_category_statistics(start_date, end_date, "支出", self.category_level)
-        self.expense_structure_table.setRowCount(len(expense_stats))
+        if expense_stats and summary['total_expense'] > 0:
+            expense_labels = [item[0] for item in expense_stats]
+            expense_data = [item[1] for item in expense_stats]
+            # 限制显示前8个类别，其余合并为"其他"
+            if len(expense_labels) > 8:
+                other_amount = sum(expense_data[8:])
+                expense_labels = expense_labels[:8] + ["其他"]
+                expense_data = expense_data[:8] + [other_amount]
+            self.create_pie_chart(self.expense_figure, expense_data, expense_labels, "支出结构")
+        else:
+            self.create_pie_chart(self.expense_figure, [], [], "支出结构")
         
-        for i, (category, amount, count) in enumerate(expense_stats):
-            ratio = (amount / summary['total_expense'] * 100) if summary['total_expense'] > 0 else 0
-            self.expense_structure_table.setItem(i, 0, QTableWidgetItem(category))
-            self.expense_structure_table.setItem(i, 1, QTableWidgetItem(f"¥{amount:.2f}"))
-            self.expense_structure_table.setItem(i, 2, QTableWidgetItem(f"{ratio:.1f}%"))
-        
-        # 更新账户分布
+        # 更新账户分布饼图
         account_stats = self.db_manager.get_account_statistics(start_date, end_date)
-        self.account_distribution_table.setRowCount(len(account_stats))
+        if account_stats:
+            account_labels = [item[0] for item in account_stats]
+            account_data = [item[1] + item[2] for item in account_stats]  # 收入+支出
+            # 限制显示前6个账户，其余合并为"其他"
+            if len(account_labels) > 6:
+                other_amount = sum(account_data[6:])
+                account_labels = account_labels[:6] + ["其他"]
+                account_data = account_data[:6] + [other_amount]
+            self.create_pie_chart(self.account_figure, account_data, account_labels, "账户分布")
+        else:
+            self.create_pie_chart(self.account_figure, [], [], "账户分布")
         
-        for i, (account, income, expense, count) in enumerate(account_stats):
-            total = income + expense
-            self.account_distribution_table.setItem(i, 0, QTableWidgetItem(account))
-            self.account_distribution_table.setItem(i, 1, QTableWidgetItem(f"¥{income:.2f}"))
-            self.account_distribution_table.setItem(i, 2, QTableWidgetItem(f"¥{expense:.2f}"))
-            self.account_distribution_table.setItem(i, 3, QTableWidgetItem(f"¥{total:.2f}"))
+        # 刷新画布
+        self.income_canvas.draw()
+        self.expense_canvas.draw()
+        self.account_canvas.draw()
         
         # 更新销账状态统计
         settlement_stats = self.db_manager.get_settlement_statistics(start_date, end_date)
