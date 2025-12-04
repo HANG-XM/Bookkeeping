@@ -56,9 +56,17 @@ class EditExpenseDialog(QDialog):
         self.account_combo = QComboBox()
         self.load_accounts()
         
-        basic_layout.addRow("交易时间:", self.date_edit)
-        basic_layout.addRow("金额:", self.amount_spin)
-        basic_layout.addRow("账户:", self.account_combo)
+        time_label = QLabel("交易时间:")
+        time_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(time_label, self.date_edit)
+        
+        amount_label = QLabel("金额:")
+        amount_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(amount_label, self.amount_spin)
+        
+        account_label = QLabel("账户:")
+        account_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(account_label, self.account_combo)
         
         basic_info_group.setLayout(basic_layout)
         layout.addWidget(basic_info_group)
@@ -70,6 +78,8 @@ class EditExpenseDialog(QDialog):
         # 主类别卡片区域
         main_category_label = QLabel("主类别:")
         main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        main_category_label.setStyleSheet("background-color: transparent;")
+        main_category_label.setStyleSheet("background-color: transparent;")
         category_layout.addWidget(main_category_label)
         
         # 创建滚动区域
@@ -89,6 +99,7 @@ class EditExpenseDialog(QDialog):
         # 子类别卡片区域
         self.subcategory_label = QLabel("子类别:")
         self.subcategory_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.subcategory_label.setStyleSheet("background-color: transparent;")
         self.subcategory_label.setVisible(False)
         category_layout.addWidget(self.subcategory_label)
         
@@ -118,6 +129,7 @@ class EditExpenseDialog(QDialog):
         
         # 销账标记
         self.settled_check = QCheckBox("已销账")
+        self.settled_check.setStyleSheet("background-color: transparent;")
         
         # 退款信息
         self.refund_amount_spin = QDoubleSpinBox()
@@ -126,10 +138,16 @@ class EditExpenseDialog(QDialog):
         self.refund_amount_spin.setPrefix("¥")
         self.refund_reason_edit = QLineEdit()
         
-        other_layout.addRow("备注:", self.description_edit)
+        note_label = QLabel("备注:")
+        note_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(note_label, self.description_edit)
         other_layout.addRow("", self.settled_check)
-        other_layout.addRow("退款金额:", self.refund_amount_spin)
-        other_layout.addRow("退款原因:", self.refund_reason_edit)
+        refund_amount_label = QLabel("退款金额:")
+        refund_amount_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(refund_amount_label, self.refund_amount_spin)
+        refund_reason_label = QLabel("退款原因:")
+        refund_reason_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(refund_reason_label, self.refund_reason_edit)
         
         other_info_group.setLayout(other_layout)
         layout.addWidget(other_info_group)
@@ -321,9 +339,17 @@ class AddExpenseDialog(QDialog):
         self.account_combo = QComboBox()
         self.load_accounts()
         
-        basic_layout.addRow("交易时间:", self.date_edit)
-        basic_layout.addRow("金额:", self.amount_spin)
-        basic_layout.addRow("账户:", self.account_combo)
+        time_label = QLabel("交易时间:")
+        time_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(time_label, self.date_edit)
+        
+        amount_label = QLabel("金额:")
+        amount_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(amount_label, self.amount_spin)
+        
+        account_label = QLabel("账户:")
+        account_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(account_label, self.account_combo)
         
         basic_info_group.setLayout(basic_layout)
         layout.addWidget(basic_info_group)
@@ -335,6 +361,8 @@ class AddExpenseDialog(QDialog):
         # 主类别卡片区域
         main_category_label = QLabel("主类别:")
         main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        main_category_label.setStyleSheet("background-color: transparent;")
+        main_category_label.setStyleSheet("background-color: transparent;")
         category_layout.addWidget(main_category_label)
         
         # 创建滚动区域
@@ -354,6 +382,7 @@ class AddExpenseDialog(QDialog):
         # 子类别卡片区域
         self.subcategory_label = QLabel("子类别:")
         self.subcategory_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.subcategory_label.setStyleSheet("background-color: transparent;")
         self.subcategory_label.setVisible(False)
         category_layout.addWidget(self.subcategory_label)
         
@@ -382,6 +411,7 @@ class AddExpenseDialog(QDialog):
         
         # 销账标记
         self.settled_check = QCheckBox("已销账")
+        self.settled_check.setStyleSheet("background-color: transparent;")
         
         # 退款信息
         self.refund_amount_spin = QDoubleSpinBox()
@@ -390,10 +420,16 @@ class AddExpenseDialog(QDialog):
         self.refund_amount_spin.setPrefix("¥")
         self.refund_reason_edit = QLineEdit()
         
-        other_layout.addRow("备注:", self.description_edit)
+        note_label = QLabel("备注:")
+        note_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(note_label, self.description_edit)
         other_layout.addRow("", self.settled_check)
-        other_layout.addRow("退款金额:", self.refund_amount_spin)
-        other_layout.addRow("退款原因:", self.refund_reason_edit)
+        refund_amount_label = QLabel("退款金额:")
+        refund_amount_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(refund_amount_label, self.refund_amount_spin)
+        refund_reason_label = QLabel("退款原因:")
+        refund_reason_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(refund_reason_label, self.refund_reason_edit)
         
         other_info_group.setLayout(other_layout)
         layout.addWidget(other_info_group)
@@ -583,7 +619,9 @@ class SystemSettingsDialog(QDialog):
         
         # 当前主题显示
         current_theme_layout = QHBoxLayout()
-        current_theme_layout.addWidget(QLabel("当前主题:"))
+        current_theme_label = QLabel("当前主题:")
+        current_theme_label.setStyleSheet("background-color: transparent;")
+        current_theme_layout.addWidget(current_theme_label)
         
         current_theme_label = QLabel(theme_manager.get_current_theme()["name"])
         current_theme_label.setStyleSheet(f"""
@@ -1030,9 +1068,17 @@ class AddLedgerDialog(QDialog):
         self.description_edit = QTextEdit()
         self.description_edit.setMaximumHeight(80)
         
-        form_layout.addRow("账本名称:", self.name_edit)
-        form_layout.addRow("账本类型:", self.type_combo)
-        form_layout.addRow("备注:", self.description_edit)
+        ledger_name_label = QLabel("账本名称:")
+        ledger_name_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(ledger_name_label, self.name_edit)
+        
+        ledger_type_label = QLabel("账本类型:")
+        ledger_type_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(ledger_type_label, self.type_combo)
+        
+        ledger_note_label = QLabel("备注:")
+        ledger_note_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(ledger_note_label, self.description_edit)
         
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
@@ -1089,9 +1135,17 @@ class EditIncomeDialog(QDialog):
         self.account_combo = QComboBox()
         self.load_accounts()
         
-        basic_layout.addRow("交易时间:", self.date_edit)
-        basic_layout.addRow("金额:", self.amount_spin)
-        basic_layout.addRow("账户:", self.account_combo)
+        time_label = QLabel("交易时间:")
+        time_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(time_label, self.date_edit)
+        
+        amount_label = QLabel("金额:")
+        amount_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(amount_label, self.amount_spin)
+        
+        account_label = QLabel("账户:")
+        account_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(account_label, self.account_combo)
         
         basic_info_group.setLayout(basic_layout)
         layout.addWidget(basic_info_group)
@@ -1103,6 +1157,8 @@ class EditIncomeDialog(QDialog):
         # 主类别卡片区域
         main_category_label = QLabel("主类别:")
         main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        main_category_label.setStyleSheet("background-color: transparent;")
+        main_category_label.setStyleSheet("background-color: transparent;")
         category_layout.addWidget(main_category_label)
         
         # 创建滚动区域
@@ -1122,6 +1178,7 @@ class EditIncomeDialog(QDialog):
         # 子类别卡片区域
         self.subcategory_label = QLabel("子类别:")
         self.subcategory_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.subcategory_label.setStyleSheet("background-color: transparent;")
         self.subcategory_label.setVisible(False)
         category_layout.addWidget(self.subcategory_label)
         
@@ -1149,7 +1206,9 @@ class EditIncomeDialog(QDialog):
         # 备注
         self.description_edit = QLineEdit()
         
-        other_layout.addRow("备注:", self.description_edit)
+        note_label = QLabel("备注:")
+        note_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(note_label, self.description_edit)
         
         other_info_group.setLayout(other_layout)
         layout.addWidget(other_info_group)
@@ -1338,9 +1397,17 @@ class AddIncomeDialog(QDialog):
         self.account_combo = QComboBox()
         self.load_accounts()
         
-        basic_layout.addRow("交易时间:", self.date_edit)
-        basic_layout.addRow("金额:", self.amount_spin)
-        basic_layout.addRow("账户:", self.account_combo)
+        time_label = QLabel("交易时间:")
+        time_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(time_label, self.date_edit)
+        
+        amount_label = QLabel("金额:")
+        amount_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(amount_label, self.amount_spin)
+        
+        account_label = QLabel("账户:")
+        account_label.setStyleSheet("background-color: transparent;")
+        basic_layout.addRow(account_label, self.account_combo)
         
         basic_info_group.setLayout(basic_layout)
         layout.addWidget(basic_info_group)
@@ -1352,6 +1419,8 @@ class AddIncomeDialog(QDialog):
         # 主类别卡片区域
         main_category_label = QLabel("主类别:")
         main_category_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        main_category_label.setStyleSheet("background-color: transparent;")
+        main_category_label.setStyleSheet("background-color: transparent;")
         category_layout.addWidget(main_category_label)
         
         # 创建滚动区域
@@ -1371,6 +1440,7 @@ class AddIncomeDialog(QDialog):
         # 子类别卡片区域
         self.subcategory_label = QLabel("子类别:")
         self.subcategory_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.subcategory_label.setStyleSheet("background-color: transparent;")
         self.subcategory_label.setVisible(False)
         category_layout.addWidget(self.subcategory_label)
         
@@ -1398,7 +1468,9 @@ class AddIncomeDialog(QDialog):
         # 备注
         self.description_edit = QLineEdit()
         
-        other_layout.addRow("备注:", self.description_edit)
+        note_label = QLabel("备注:")
+        note_label.setStyleSheet("background-color: transparent;")
+        other_layout.addRow(note_label, self.description_edit)
         
         other_info_group.setLayout(other_layout)
         layout.addWidget(other_info_group)

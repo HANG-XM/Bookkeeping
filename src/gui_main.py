@@ -48,11 +48,25 @@ class EditAccountDialog(QDialog):
         self.description_edit = QTextEdit()
         self.description_edit.setMaximumHeight(80)
         
-        form_layout.addRow("账户名称:", self.name_edit)
-        form_layout.addRow("账户类型:", self.type_combo)
-        form_layout.addRow("开户行:", self.bank_edit)
-        form_layout.addRow("初始余额:", self.balance_spin)
-        form_layout.addRow("备注:", self.description_edit)
+        account_name_label = QLabel("账户名称:")
+        account_name_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(account_name_label, self.name_edit)
+        
+        account_type_label = QLabel("账户类型:")
+        account_type_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(account_type_label, self.type_combo)
+        
+        bank_label = QLabel("开户行:")
+        bank_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(bank_label, self.bank_edit)
+        
+        balance_label = QLabel("初始余额:")
+        balance_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(balance_label, self.balance_spin)
+        
+        note_label = QLabel("备注:")
+        note_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(note_label, self.description_edit)
         
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
@@ -108,11 +122,25 @@ class AddAccountDialog(QDialog):
         self.description_edit = QTextEdit()
         self.description_edit.setMaximumHeight(80)
         
-        form_layout.addRow("账户名称:", self.name_edit)
-        form_layout.addRow("账户类型:", self.type_combo)
-        form_layout.addRow("开户行:", self.bank_edit)
-        form_layout.addRow("初始余额:", self.balance_spin)
-        form_layout.addRow("备注:", self.description_edit)
+        account_name_label = QLabel("账户名称:")
+        account_name_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(account_name_label, self.name_edit)
+        
+        account_type_label = QLabel("账户类型:")
+        account_type_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(account_type_label, self.type_combo)
+        
+        bank_label = QLabel("开户行:")
+        bank_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(bank_label, self.bank_edit)
+        
+        balance_label = QLabel("初始余额:")
+        balance_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(balance_label, self.balance_spin)
+        
+        note_label = QLabel("备注:")
+        note_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(note_label, self.description_edit)
         
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
@@ -169,11 +197,25 @@ class TransferDialog(QDialog):
         # 备注
         self.description_edit = QLineEdit()
         
-        form_layout.addRow("转账日期:", self.date_edit)
-        form_layout.addRow("转出账户:", self.from_account_combo)
-        form_layout.addRow("转入账户:", self.to_account_combo)
-        form_layout.addRow("转账金额:", self.amount_spin)
-        form_layout.addRow("备注:", self.description_edit)
+        transfer_date_label = QLabel("转账日期:")
+        transfer_date_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(transfer_date_label, self.date_edit)
+        
+        from_account_label = QLabel("转出账户:")
+        from_account_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(from_account_label, self.from_account_combo)
+        
+        to_account_label = QLabel("转入账户:")
+        to_account_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(to_account_label, self.to_account_combo)
+        
+        transfer_amount_label = QLabel("转账金额:")
+        transfer_amount_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(transfer_amount_label, self.amount_spin)
+        
+        transfer_note_label = QLabel("备注:")
+        transfer_note_label.setStyleSheet("background-color: transparent;")
+        form_layout.addRow(transfer_note_label, self.description_edit)
         
         button_layout = QHBoxLayout()
         ok_button = QPushButton("确定")
@@ -464,15 +506,21 @@ class StatisticsWidget(QWidget):
         
         self.custom_date_widget = QWidget()
         custom_date_layout = QHBoxLayout()
-        custom_date_layout.addWidget(QLabel("起始日期:"))
+        start_date_label = QLabel("起始日期:")
+        start_date_label.setStyleSheet("background-color: transparent;")
+        custom_date_layout.addWidget(start_date_label)
         custom_date_layout.addWidget(self.start_date_edit)
-        custom_date_layout.addWidget(QLabel("结束日期:"))
+        end_date_label = QLabel("结束日期:")
+        end_date_label.setStyleSheet("background-color: transparent;")
+        custom_date_layout.addWidget(end_date_label)
         custom_date_layout.addWidget(self.end_date_edit)
         custom_date_layout.addLayout(quick_layout)
         self.custom_date_widget.setLayout(custom_date_layout)
         self.custom_date_widget.hide()
         
-        view_control_layout.addWidget(QLabel("视图类型:"))
+        view_type_label = QLabel("视图类型:")
+        view_type_label.setStyleSheet("background-color: transparent;")
+        view_control_layout.addWidget(view_type_label)
         view_control_layout.addWidget(self.view_combo)
         view_control_layout.addWidget(self.prev_btn)
         view_control_layout.addWidget(self.current_date_label)
@@ -491,6 +539,7 @@ class StatisticsWidget(QWidget):
         options_layout = QHBoxLayout()
         
         self.show_chinese_check = QCheckBox("显示金额大写")
+        self.show_chinese_check.setStyleSheet("background-color: transparent;")
         self.show_chinese_check.toggled.connect(self.toggle_chinese_amount)
         
         self.category_level_combo = QComboBox()
@@ -498,7 +547,9 @@ class StatisticsWidget(QWidget):
         self.category_level_combo.currentTextChanged.connect(self.on_category_level_changed)
         
         options_layout.addWidget(self.show_chinese_check)
-        options_layout.addWidget(QLabel("类别统计:"))
+        category_stats_label = QLabel("类别统计:")
+        category_stats_label.setStyleSheet("background-color: transparent;")
+        options_layout.addWidget(category_stats_label)
         options_layout.addWidget(self.category_level_combo)
         options_layout.addStretch()
         
@@ -511,6 +562,8 @@ class StatisticsWidget(QWidget):
         
         # 收支汇总卡片
         summary_cards_layout = QHBoxLayout()
+        summary_cards_layout.setSpacing(15)
+        summary_cards_layout.setContentsMargins(10, 5, 10, 5)
         
         # 总收入卡片
         income_card = self.create_summary_card("总收入", "#4CAF50", "#E8F5E8")
@@ -540,7 +593,7 @@ class StatisticsWidget(QWidget):
                 color: #666;
                 font-size: 11px;
                 padding: 5px;
-                background-color: #f5f5f5;
+                background-color: transparent;
                 border-radius: 3px;
             }
         """)
@@ -587,12 +640,23 @@ class StatisticsWidget(QWidget):
         settlement_group = QGroupBox("销账状态分布")
         settlement_form_layout = QFormLayout()
         self.settled_amount_label = QLabel("¥0.00")
+        self.settled_amount_label.setStyleSheet("background-color: transparent;")
         self.unsettled_amount_label = QLabel("¥0.00")
+        self.unsettled_amount_label.setStyleSheet("background-color: transparent;")
         self.settled_ratio_label = QLabel("0%")
+        self.settled_ratio_label.setStyleSheet("background-color: transparent;")
         
-        settlement_form_layout.addRow("已销账金额:", self.settled_amount_label)
-        settlement_form_layout.addRow("未销账金额:", self.unsettled_amount_label)
-        settlement_form_layout.addRow("销账比例:", self.settled_ratio_label)
+        settled_amount_label = QLabel("已销账金额:")
+        settled_amount_label.setStyleSheet("background-color: transparent;")
+        settlement_form_layout.addRow(settled_amount_label, self.settled_amount_label)
+        
+        unsettled_amount_label = QLabel("未销账金额:")
+        unsettled_amount_label.setStyleSheet("background-color: transparent;")
+        settlement_form_layout.addRow(unsettled_amount_label, self.unsettled_amount_label)
+        
+        settled_ratio_label = QLabel("销账比例:")
+        settled_ratio_label.setStyleSheet("background-color: transparent;")
+        settlement_form_layout.addRow(settled_ratio_label, self.settled_ratio_label)
         
         settlement_group.setLayout(settlement_form_layout)
         
@@ -600,12 +664,23 @@ class StatisticsWidget(QWidget):
         refund_group = QGroupBox("退款统计")
         refund_form_layout = QFormLayout()
         self.refund_amount_label = QLabel("¥0.00")
+        self.refund_amount_label.setStyleSheet("background-color: transparent;")
         self.refund_count_label = QLabel("0")
+        self.refund_count_label.setStyleSheet("background-color: transparent;")
         self.refund_ratio_label = QLabel("0%")
+        self.refund_ratio_label.setStyleSheet("background-color: transparent;")
         
-        refund_form_layout.addRow("退款总额:", self.refund_amount_label)
-        refund_form_layout.addRow("退款笔数:", self.refund_count_label)
-        refund_form_layout.addRow("退款占比:", self.refund_ratio_label)
+        refund_total_label = QLabel("退款总额:")
+        refund_total_label.setStyleSheet("background-color: transparent;")
+        refund_form_layout.addRow(refund_total_label, self.refund_amount_label)
+        
+        refund_count_text_label = QLabel("退款笔数:")
+        refund_count_text_label.setStyleSheet("background-color: transparent;")
+        refund_form_layout.addRow(refund_count_text_label, self.refund_count_label)
+        
+        refund_ratio_text_label = QLabel("退款占比:")
+        refund_ratio_text_label.setStyleSheet("background-color: transparent;")
+        refund_form_layout.addRow(refund_ratio_text_label, self.refund_ratio_label)
         
         refund_group.setLayout(refund_form_layout)
         
@@ -756,34 +831,37 @@ class StatisticsWidget(QWidget):
                 background-color: {bg_color};
                 border: 2px solid {color};
                 border-radius: 8px;
-                padding: 10px;
+                padding: 12px;
                 font-weight: bold;
             }}
         """)
-        card.setFixedWidth(200)
-        card.setFixedHeight(100)
+        card.setFixedWidth(240)
+        card.setFixedHeight(120)
         
         layout = QVBoxLayout()
         
         # 标题
         title_label = QLabel(title)
-        title_label.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold;")
+        title_label.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold; background-color: transparent;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
         
         # 金额
         amount_label = QLabel("¥0.00")
         amount_label.setObjectName("card_amount")
-        amount_label.setStyleSheet(f"color: {color}; font-size: 20px; font-weight: bold;")
+        amount_label.setStyleSheet(f"color: {color}; font-size: 24px; font-weight: bold; background-color: transparent;")
         amount_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        amount_label.setWordWrap(True)
+        amount_label.setMinimumHeight(35)
         layout.addWidget(amount_label)
         
         # 中文大写
         chinese_label = QLabel("")
         chinese_label.setObjectName("card_chinese")
-        chinese_label.setStyleSheet(f"color: {color}; font-size: 10px;")
+        chinese_label.setStyleSheet(f"color: {color}; font-size: 12px; background-color: transparent;")
         chinese_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         chinese_label.setWordWrap(True)
+        chinese_label.setMinimumHeight(20)
         layout.addWidget(chinese_label)
         
         card.setLayout(layout)
@@ -1246,7 +1324,9 @@ class MainWindow(QMainWindow):
         
         # 基础搜索
         basic_search_layout = QHBoxLayout()
-        basic_search_layout.addWidget(QLabel("关键词搜索:"))
+        keyword_label = QLabel("关键词搜索:")
+        keyword_label.setStyleSheet("background-color: transparent;")
+        basic_search_layout.addWidget(keyword_label)
         
         self.keyword_search_edit = QLineEdit()
         self.keyword_search_edit.setPlaceholderText("输入关键词搜索备注、类别、账户、退款原因...")
@@ -1323,21 +1403,27 @@ class MainWindow(QMainWindow):
         basic_filter_layout = QHBoxLayout()
         
         # 账户筛选
-        basic_filter_layout.addWidget(QLabel("账户:"))
+        account_label = QLabel("账户:")
+        account_label.setStyleSheet("background-color: transparent;")
+        basic_filter_layout.addWidget(account_label)
         self.account_search_combo = QComboBox()
         self.account_search_combo.setMinimumWidth(120)  # 设置组合框最小宽度
         self.account_search_combo.addItem("")
         basic_filter_layout.addWidget(self.account_search_combo)
         
         # 交易类型
-        basic_filter_layout.addWidget(QLabel("类型:"))
+        type_label = QLabel("类型:")
+        type_label.setStyleSheet("background-color: transparent;")
+        basic_filter_layout.addWidget(type_label)
         self.transaction_type_combo = QComboBox()
         self.transaction_type_combo.setMinimumWidth(80)  # 设置组合框最小宽度
         self.transaction_type_combo.addItems(["", "收入", "支出"])
         basic_filter_layout.addWidget(self.transaction_type_combo)
         
         # 分类筛选
-        basic_filter_layout.addWidget(QLabel("分类:"))
+        category_label = QLabel("分类:")
+        category_label.setStyleSheet("background-color: transparent;")
+        basic_filter_layout.addWidget(category_label)
         self.category_combo = QComboBox()
         self.category_combo.setMinimumWidth(100)  # 设置组合框最小宽度
         self.category_combo.addItem("")
@@ -1356,13 +1442,17 @@ class MainWindow(QMainWindow):
         status_group = QGroupBox("状态筛选")
         status_group.setMinimumWidth(200)  # 设置分组框最小宽度
         status_layout = QHBoxLayout()
-        status_layout.addWidget(QLabel("销账:"))
+        settled_label = QLabel("销账:")
+        settled_label.setStyleSheet("background-color: transparent;")
+        status_layout.addWidget(settled_label)
         self.settled_combo = QComboBox()
         self.settled_combo.setMinimumWidth(80)  # 设置组合框最小宽度
         self.settled_combo.addItems(["", "已销账", "未销账"])
         status_layout.addWidget(self.settled_combo)
         
-        status_layout.addWidget(QLabel("退款:"))
+        refund_label = QLabel("退款:")
+        refund_label.setStyleSheet("background-color: transparent;")
+        status_layout.addWidget(refund_label)
         self.refund_combo = QComboBox()
         self.refund_combo.setMinimumWidth(80)  # 设置组合框最小宽度
         self.refund_combo.addItems(["", "有退款", "无退款"])
@@ -1389,7 +1479,9 @@ class MainWindow(QMainWindow):
         self.min_amount_spin.setMinimumWidth(100)  # 设置输入框最小宽度
         amount_layout.addWidget(self.min_amount_spin)
         
-        amount_layout.addWidget(QLabel("至"))
+        amount_to_label = QLabel("至")
+        amount_to_label.setStyleSheet("background-color: transparent;")
+        amount_layout.addWidget(amount_to_label)
         self.max_amount_spin = QDoubleSpinBox()
         self.max_amount_spin.setRange(0, 999999.99)
         self.max_amount_spin.setDecimals(2)
@@ -1411,7 +1503,9 @@ class MainWindow(QMainWindow):
         self.start_date_edit.setMinimumWidth(120)  # 设置日期选择器最小宽度
         date_layout.addWidget(self.start_date_edit)
         
-        date_layout.addWidget(QLabel("至"))
+        to_label = QLabel("至")
+        to_label.setStyleSheet("background-color: transparent;")
+        date_layout.addWidget(to_label)
         self.end_date_edit = QDateEdit()
         self.end_date_edit.setCalendarPopup(True)
         self.end_date_edit.setDate(QDate.currentDate())
