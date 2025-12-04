@@ -1,5 +1,7 @@
 import sys
 import sqlite3
+import json
+import os
 from datetime import datetime, date
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                             QWidget, QPushButton, QLabel, QLineEdit, QComboBox, 
@@ -7,15 +9,367 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                             QFormLayout, QTextEdit, QDateTimeEdit, QCheckBox,
                             QDoubleSpinBox, QMessageBox, QSplitter, QGroupBox,
                             QTreeWidget, QTreeWidgetItem, QHeaderView, QSpinBox,
-                            QCalendarWidget, QDateEdit, QScrollArea, QGridLayout)
-from PyQt6.QtCore import Qt, QDateTime, QDate
-from PyQt6.QtGui import QFont, QIcon
+                            QCalendarWidget, QDateEdit, QScrollArea, QGridLayout,
+                            QFrame, QButtonGroup, QRadioButton)
+from PyQt6.QtCore import Qt, QDateTime, QDate, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt6.QtGui import QFont, QIcon, QPalette, QColor
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
 matplotlib.rcParams['axes.unicode_minus'] = False
+
+class ThemeManager:
+    """主题管理器"""
+    
+    THEMES = {
+        "default": {
+            "name": "日间主题",
+            "description": "明亮配色，适合白天使用",
+            "colors": {
+                "background": "#FFFFFF",
+                "secondary_background": "#F5F5F5",
+                "card_background": "#FFFFFF",
+                "primary_text": "#333333",
+                "secondary_text": "#666666",
+                "accent": "#2196F3",
+                "success": "#4CAF50",
+                "warning": "#FF9800",
+                "danger": "#F44336",
+                "border": "#E0E0E0",
+                "hover": "#F0F0F0",
+                "income": "#4CAF50",
+                "expense": "#FF6B6B",
+                "chart_colors": ["#4CAF50", "#FF9800", "#2196F3", "#9C27B0", "#FF5722", "#795548", "#607D8B", "#E91E63"]
+            }
+        },
+        "dark": {
+            "name": "夜间主题",
+            "description": "深色配色，适合夜间使用",
+            "colors": {
+                "background": "#1E1E1E",
+                "secondary_background": "#2D2D2D",
+                "card_background": "#252526",
+                "primary_text": "#FFFFFF",
+                "secondary_text": "#B0B0B0",
+                "accent": "#64B5F6",
+                "success": "#81C784",
+                "warning": "#FFB74D",
+                "danger": "#E57373",
+                "border": "#404040",
+                "hover": "#333333",
+                "income": "#81C784",
+                "expense": "#E57373",
+                "chart_colors": ["#81C784", "#FFB74D", "#64B5F6", "#BA68C8", "#FF8A65", "#8D6E63", "#90A4AE", "#F06292"]
+            }
+        },
+        "eye_care": {
+            "name": "护眼主题",
+            "description": "低蓝光配色，保护视力",
+            "colors": {
+                "background": "#F4F1E8",
+                "secondary_background": "#E8E4D8",
+                "card_background": "#FAF8F3",
+                "primary_text": "#3D3D3D",
+                "secondary_text": "#666666",
+                "accent": "#8D6E63",
+                "success": "#689F38",
+                "warning": "#FFA726",
+                "danger": "#EF5350",
+                "border": "#D7CCC8",
+                "hover": "#EFEBE9",
+                "income": "#689F38",
+                "expense": "#EF5350",
+                "chart_colors": ["#689F38", "#FFA726", "#8D6E63", "#7E57C2", "#FF7043", "#8D6E63", "#A1887F", "#EC407A"]
+            }
+        },
+        "cute": {
+            "name": "可爱主题",
+            "description": "淡粉色配色，温馨可爱",
+            "colors": {
+                "background": "#FFF5F7",
+                "secondary_background": "#FCE4EC",
+                "card_background": "#FFFFFF",
+                "primary_text": "#4A4A4A",
+                "secondary_text": "#7A7A7A",
+                "accent": "#F48FB1",
+                "success": "#AED581",
+                "warning": "#FFD54F",
+                "danger": "#FF8A80",
+                "border": "#F8BBD0",
+                "hover": "#FCE4EC",
+                "income": "#AED581",
+                "expense": "#FF8A80",
+                "chart_colors": ["#F48FB1", "#AED581", "#FFD54F", "#81D4FA", "#CE93D8", "#FFCC80", "#A5D6A7", "#FFAB91"]
+            }
+        }
+    }
+    
+    def __init__(self):
+        self.current_theme = "default"
+        self.settings_file = "theme_settings.json"
+        self.load_settings()
+    
+    def load_settings(self):
+        """加载主题设置"""
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                    self.current_theme = settings.get('theme', 'default')
+            except:
+                self.current_theme = "default"
+    
+    def save_settings(self):
+        """保存主题设置"""
+        settings = {'theme': self.current_theme}
+        try:
+            with open(self.settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, ensure_ascii=False, indent=2)
+        except:
+            pass
+    
+    def get_current_theme(self):
+        """获取当前主题"""
+        return self.THEMES.get(self.current_theme, self.THEMES["default"])
+    
+    def set_theme(self, theme_name):
+        """设置主题"""
+        if theme_name in self.THEMES:
+            self.current_theme = theme_name
+            self.save_settings()
+            return True
+        return False
+    
+    def get_color(self, color_name):
+        """获取当前主题的颜色"""
+        theme = self.get_current_theme()
+        return theme["colors"].get(color_name, "#000000")
+    
+    def apply_theme_to_widget(self, widget):
+        """将主题应用到控件"""
+        colors = self.get_current_theme()["colors"]
+        
+        # 设置样式表
+        style = f"""
+            QWidget {{
+                background-color: {colors['background']};
+                color: {colors['primary_text']};
+                font-family: "Microsoft YaHei", "SimHei", Arial;
+            }}
+            
+            QMainWindow {{
+                background-color: {colors['background']};
+            }}
+            
+            QGroupBox {{
+                background-color: {colors['card_background']};
+                border: 2px solid {colors['border']};
+                border-radius: 8px;
+                margin-top: 1ex;
+                font-weight: bold;
+                padding-top: 10px;
+            }}
+            
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                color: {colors['primary_text']};
+            }}
+            
+            QPushButton {{
+                background-color: {colors['accent']};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }}
+            
+            QPushButton:hover {{
+                background-color: {colors['hover']};
+                border: 1px solid {colors['accent']};
+            }}
+            
+            QPushButton:pressed {{
+                background-color: {colors['accent']};
+            }}
+            
+            QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+                background-color: {colors['card_background']};
+                border: 2px solid {colors['border']};
+                border-radius: 4px;
+                padding: 6px;
+                color: {colors['primary_text']};
+            }}
+            
+            QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+                border: 2px solid {colors['accent']};
+            }}
+            
+            QTableWidget {{
+                background-color: {colors['card_background']};
+                alternate-background-color: {colors['secondary_background']};
+                gridline-color: {colors['border']};
+                selection-background-color: {colors['accent']};
+            }}
+            
+            QTableWidget::item {{
+                padding: 5px;
+                color: {colors['primary_text']};
+            }}
+            
+            QTableWidget::item:selected {{
+                background-color: {colors['accent']};
+                color: white;
+            }}
+            
+            QHeaderView::section {{
+                background-color: {colors['secondary_background']};
+                color: {colors['primary_text']};
+                padding: 5px;
+                border: 1px solid {colors['border']};
+                font-weight: bold;
+            }}
+            
+            QTabWidget::pane {{
+                border: 1px solid {colors['border']};
+                background-color: {colors['card_background']};
+            }}
+            
+            QTabBar::tab {{
+                background-color: {colors['secondary_background']};
+                color: {colors['primary_text']};
+                padding: 8px 16px;
+                margin-right: 2px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }}
+            
+            QTabBar::tab:selected {{
+                background-color: {colors['accent']};
+                color: white;
+            }}
+            
+            QTabBar::tab:hover {{
+                background-color: {colors['hover']};
+            }}
+            
+            QScrollArea {{
+                background-color: {colors['background']};
+                border: none;
+            }}
+            
+            QLabel {{
+                color: {colors['primary_text']};
+            }}
+            
+            QCheckBox {{
+                color: {colors['primary_text']};
+            }}
+            
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+                border: 2px solid {colors['border']};
+                border-radius: 3px;
+                background-color: {colors['card_background']};
+            }}
+            
+            QCheckBox::indicator:checked {{
+                background-color: {colors['accent']};
+                border-color: {colors['accent']};
+            }}
+            
+            QTreeWidget {{
+                background-color: {colors['card_background']};
+                border: 1px solid {colors['border']};
+                selection-background-color: {colors['accent']};
+            }}
+            
+            QTreeWidget::item {{
+                padding: 3px;
+                color: {colors['primary_text']};
+            }}
+            
+            QTreeWidget::item:selected {{
+                background-color: {colors['accent']};
+                color: white;
+            }}
+            
+            QTreeWidget::item:hover {{
+                background-color: {colors['hover']};
+            }}
+            
+            QDateEdit, QDateTimeEdit {{
+                background-color: {colors['card_background']};
+                border: 2px solid {colors['border']};
+                border-radius: 4px;
+                padding: 6px;
+                color: {colors['primary_text']};
+            }}
+            
+            QCalendarWidget {{
+                background-color: {colors['card_background']};
+                color: {colors['primary_text']};
+            }}
+            
+            QCalendarWidget QToolButton {{
+                background-color: {colors['secondary_background']};
+                color: {colors['primary_text']};
+                border: 1px solid {colors['border']};
+                border-radius: 4px;
+                margin: 2px;
+            }}
+            
+            QCalendarWidget QToolButton:hover {{
+                background-color: {colors['accent']};
+                color: white;
+            }}
+        """
+        
+        widget.setStyleSheet(style)
+        
+        # 更新matplotlib图表颜色
+        self.update_matplotlib_colors()
+    
+    def update_matplotlib_colors(self):
+        """更新matplotlib图表颜色"""
+        colors = self.get_current_theme()["colors"]
+        
+        # 设置图表样式
+        plt.style.use('default')  # 重置样式
+        
+        # 设置字体和颜色（只使用有效的参数）
+        matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
+        matplotlib.rcParams['axes.unicode_minus'] = False
+        
+        # 尝试设置颜色参数，如果无效则跳过
+        valid_params = {
+            'figure.facecolor': colors['background'],
+            'axes.facecolor': colors['background'],
+            'axes.edgecolor': colors['border'],
+            'axes.labelcolor': colors['primary_text'],
+            'xtick.color': colors['primary_text'],
+            'ytick.color': colors['primary_text'],
+            'text.color': colors['primary_text'],
+            'legend.facecolor': colors['card_background'],
+            'legend.edgecolor': colors['border'],
+            'legend.labelcolor': colors['primary_text']
+        }
+        
+        for param, value in valid_params.items():
+            try:
+                matplotlib.rcParams[param] = value
+            except KeyError:
+                # 如果参数无效，跳过
+                continue
+
+# 全局主题管理器
+theme_manager = ThemeManager()
 
 def number_to_chinese(num):
     """将数字转换为中文大写"""
@@ -77,6 +431,347 @@ def number_to_chinese(num):
             result += digits[fen] + "分"
     
     return result
+
+class SystemSettingsDialog(QDialog):
+    """系统设置对话框"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("系统设置")
+        self.setModal(True)
+        self.setFixedSize(500, 400)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 标题
+        title_label = QLabel("系统设置")
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 设置选项
+        settings_group = QGroupBox("设置选项")
+        settings_layout = QVBoxLayout()
+        
+        # 主题设置按钮
+        theme_btn = QPushButton("🎨 主题设置")
+        theme_btn.clicked.connect(self.open_theme_settings)
+        theme_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme_manager.get_color('accent')};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 12px;
+                font-weight: bold;
+                font-size: 14px;
+                text-align: left;
+            }}
+            QPushButton:hover {{
+                background-color: {theme_manager.get_color('hover')};
+                border: 1px solid {theme_manager.get_color('accent')};
+            }}
+        """)
+        settings_layout.addWidget(theme_btn)
+        
+        # 当前主题显示
+        current_theme_layout = QHBoxLayout()
+        current_theme_layout.addWidget(QLabel("当前主题:"))
+        
+        current_theme_label = QLabel(theme_manager.get_current_theme()["name"])
+        current_theme_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('accent')};
+                font-weight: bold;
+            }}
+        """)
+        current_theme_layout.addWidget(current_theme_label)
+        current_theme_layout.addStretch()
+        
+        settings_layout.addLayout(current_theme_layout)
+        
+        # 主题说明
+        theme_info = QLabel("主题设置允许您更改应用的外观配色，包括日间、夜间、护眼和可爱四种预设主题。")
+        theme_info.setWordWrap(True)
+        theme_info.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-size: 12px;
+                padding: 10px;
+                background-color: {theme_manager.get_color('secondary_background')};
+                border-radius: 4px;
+            }}
+        """)
+        settings_layout.addWidget(theme_info)
+        
+        # 其他设置（预留）
+        other_settings_label = QLabel("其他设置功能正在开发中...")
+        other_settings_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-style: italic;
+            }}
+        """)
+        settings_layout.addWidget(other_settings_label)
+        
+        settings_group.setLayout(settings_layout)
+        layout.addWidget(settings_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        close_btn = QPushButton("关闭")
+        close_btn.clicked.connect(self.accept)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme_manager.get_color('accent')};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }}
+        """)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def open_theme_settings(self):
+        """打开主题设置"""
+        dialog = ThemeSelectionDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 主题已更改，重新应用样式
+            if hasattr(self.parent(), 'apply_theme'):
+                self.parent().apply_theme()
+            QMessageBox.information(self, "成功", "主题已成功应用！")
+
+class ThemeSelectionDialog(QDialog):
+    """主题选择对话框"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("主题设置")
+        self.setModal(True)
+        self.setFixedSize(800, 600)
+        self.setup_ui()
+        self.load_current_theme()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 标题
+        title_label = QLabel("选择主题")
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # 主题卡片区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_content = QWidget()
+        card_layout = QGridLayout()
+        
+        self.theme_buttons = QButtonGroup()
+        self.theme_cards = {}
+        
+        row, col = 0, 0
+        for theme_id, theme_data in theme_manager.THEMES.items():
+            card = self.create_theme_card(theme_id, theme_data)
+            card_layout.addWidget(card, row, col)
+            
+            col += 1
+            if col >= 2:  # 每行2个卡片
+                col = 0
+                row += 1
+        
+        scroll_content.setLayout(card_layout)
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        
+        reset_btn = QPushButton("恢复默认主题")
+        reset_btn.clicked.connect(self.reset_to_default)
+        button_layout.addWidget(reset_btn)
+        
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        apply_btn = QPushButton("应用")
+        apply_btn.clicked.connect(self.apply_theme)
+        apply_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme_manager.get_color('accent')};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }}
+        """)
+        button_layout.addWidget(apply_btn)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def create_theme_card(self, theme_id, theme_data):
+        """创建主题预览卡片"""
+        card = QFrame()
+        card.setFixedSize(350, 200)
+        card.setFrameStyle(QFrame.Shape.Box)
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {theme_data['colors']['card_background']};
+                border: 2px solid {theme_data['colors']['border']};
+                border-radius: 8px;
+                margin: 5px;
+            }}
+        """)
+        
+        layout = QVBoxLayout()
+        
+        # 主题标题和描述
+        title_layout = QVBoxLayout()
+        
+        title_label = QLabel(theme_data['name'])
+        title_label.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        title_label.setStyleSheet(f"color: {theme_data['colors']['primary_text']};")
+        title_layout.addWidget(title_label)
+        
+        desc_label = QLabel(theme_data['description'])
+        desc_label.setFont(QFont("Arial", 10))
+        desc_label.setStyleSheet(f"color: {theme_data['colors']['secondary_text']};")
+        desc_label.setWordWrap(True)
+        title_layout.addWidget(desc_label)
+        
+        layout.addLayout(title_layout)
+        
+        # 颜色预览
+        preview_layout = QHBoxLayout()
+        
+        # 显示主要颜色
+        colors_to_show = ['background', 'accent', 'success', 'danger', 'income', 'expense']
+        for color_name in colors_to_show:
+            color_widget = QWidget()
+            color_widget.setFixedSize(30, 30)
+            color_widget.setStyleSheet(f"""
+                QWidget {{
+                    background-color: {theme_data['colors'][color_name]};
+                    border: 1px solid {theme_data['colors']['border']};
+                    border-radius: 4px;
+                }}
+            """)
+            preview_layout.addWidget(color_widget)
+        
+        preview_layout.addStretch()
+        layout.addLayout(preview_layout)
+        
+        # 示例按钮
+        example_layout = QHBoxLayout()
+        
+        income_btn = QPushButton("收入")
+        income_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme_data['colors']['income']};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 10px;
+            }}
+        """)
+        example_layout.addWidget(income_btn)
+        
+        expense_btn = QPushButton("支出")
+        expense_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme_data['colors']['expense']};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 10px;
+            }}
+        """)
+        example_layout.addWidget(expense_btn)
+        
+        example_layout.addStretch()
+        layout.addLayout(example_layout)
+        
+        # 选择单选按钮
+        radio = QRadioButton()
+        radio.setStyleSheet(f"""
+            QRadioButton {{
+                color: {theme_data['colors']['primary_text']};
+            }}
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 2px solid {theme_data['colors']['border']};
+                border-radius: 8px;
+                background-color: {theme_data['colors']['card_background']};
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {theme_data['colors']['accent']};
+                border-color: {theme_data['colors']['accent']};
+            }}
+        """)
+        self.theme_buttons.addButton(radio)
+        self.theme_buttons.setId(radio, len(self.theme_cards))
+        self.theme_cards[radio] = theme_id
+        
+        # 如果是当前主题，标记为选中
+        if theme_id == theme_manager.current_theme:
+            radio.setChecked(True)
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {theme_data['colors']['card_background']};
+                    border: 3px solid {theme_data['colors']['accent']};
+                    border-radius: 8px;
+                    margin: 5px;
+                }}
+            """)
+        
+        # 将单选按钮和卡片组合
+        card_layout = QHBoxLayout()
+        card_layout.addLayout(layout)
+        card_layout.addWidget(radio)
+        
+        card.setLayout(card_layout)
+        
+        # 点击卡片也可以选择
+        card.mousePressEvent = lambda event: radio.setChecked(True)
+        
+        return card
+    
+    def load_current_theme(self):
+        """加载当前主题"""
+        pass  # 已在创建卡片时处理
+    
+    def reset_to_default(self):
+        """恢复默认主题"""
+        for radio, theme_id in self.theme_cards.items():
+            if theme_id == "default":
+                radio.setChecked(True)
+                break
+    
+    def apply_theme(self):
+        """应用选中的主题"""
+        checked_radio = self.theme_buttons.checkedButton()
+        if checked_radio and checked_radio in self.theme_cards:
+            theme_id = self.theme_cards[checked_radio]
+            if theme_manager.set_theme(theme_id):
+                self.accept()
+            else:
+                QMessageBox.warning(self, "错误", "主题应用失败！")
 
 class DatabaseManager:
     def __init__(self, db_path="bookkeeping.db"):
@@ -713,15 +1408,18 @@ class CategoryButton(QPushButton):
         self.update_style()
     
     def update_style(self):
+        # 获取主题颜色
+        colors = theme_manager.get_current_theme()["colors"]
+        
         if self.is_selected:
             # 选中状态
             if self.category_type == "income":
-                self.setStyleSheet("""
-                    QPushButton {
-                        border: 2px solid #4CAF50;
+                self.setStyleSheet(f"""
+                    QPushButton {{
+                        border: 2px solid {colors['income']};
                         border-radius: 6px;
                         padding: 6px 10px;
-                        background-color: #4CAF50;
+                        background-color: {colors['income']};
                         color: white;
                         font-size: 11px;
                         font-weight: bold;
@@ -729,15 +1427,15 @@ class CategoryButton(QPushButton):
                         max-height: 25px;
                         min-width: 60px;
                         max-width: 100px;
-                    }
+                    }}
                 """)
             elif self.category_type == "expense":
-                self.setStyleSheet("""
-                    QPushButton {
-                        border: 2px solid #FF6B6B;
+                self.setStyleSheet(f"""
+                    QPushButton {{
+                        border: 2px solid {colors['expense']};
                         border-radius: 6px;
                         padding: 6px 10px;
-                        background-color: #FF6B6B;
+                        background-color: {colors['expense']};
                         color: white;
                         font-size: 11px;
                         font-weight: bold;
@@ -745,15 +1443,15 @@ class CategoryButton(QPushButton):
                         max-height: 25px;
                         min-width: 60px;
                         max-width: 100px;
-                    }
+                    }}
                 """)
             else:
-                self.setStyleSheet("""
-                    QPushButton {
-                        border: 2px solid #FF6B6B;
+                self.setStyleSheet(f"""
+                    QPushButton {{
+                        border: 2px solid {colors['expense']};
                         border-radius: 6px;
                         padding: 6px 10px;
-                        background-color: #FF6B6B;
+                        background-color: {colors['expense']};
                         color: white;
                         font-size: 11px;
                         font-weight: bold;
@@ -761,69 +1459,69 @@ class CategoryButton(QPushButton):
                         max-height: 25px;
                         min-width: 60px;
                         max-width: 100px;
-                    }
+                    }}
                 """)
         else:
             # 未选中状态
             if self.category_type == "income":
-                self.setStyleSheet("""
-                    QPushButton {
-                        border: 2px solid #4CAF50;
+                self.setStyleSheet(f"""
+                    QPushButton {{
+                        border: 2px solid {colors['income']};
                         border-radius: 6px;
                         padding: 6px 10px;
-                        background-color: white;
-                        color: #333;
+                        background-color: {colors['card_background']};
+                        color: {colors['primary_text']};
                         font-size: 11px;
                         font-weight: bold;
                         min-height: 25px;
                         max-height: 25px;
                         min-width: 60px;
                         max-width: 100px;
-                    }
-                    QPushButton:hover {
-                        background-color: #E8F5E8;
-                        border-color: #45a049;
-                    }
+                    }}
+                    QPushButton:hover {{
+                        background-color: {colors['hover']};
+                        border-color: {colors['income']};
+                    }}
                 """)
             elif self.category_type == "expense":
-                self.setStyleSheet("""
-                    QPushButton {
-                        border: 2px solid #FF6B6B;
+                self.setStyleSheet(f"""
+                    QPushButton {{
+                        border: 2px solid {colors['expense']};
                         border-radius: 6px;
                         padding: 6px 10px;
-                        background-color: white;
-                        color: #333;
+                        background-color: {colors['card_background']};
+                        color: {colors['primary_text']};
                         font-size: 11px;
                         font-weight: bold;
                         min-height: 25px;
                         max-height: 25px;
                         min-width: 60px;
                         max-width: 100px;
-                    }
-                    QPushButton:hover {
-                        background-color: #FFE0E0;
-                        border-color: #FF5252;
-                    }
+                    }}
+                    QPushButton:hover {{
+                        background-color: {colors['hover']};
+                        border-color: {colors['expense']};
+                    }}
                 """)
             else:
-                self.setStyleSheet("""
-                    QPushButton {
-                        border: 2px solid #FF6B6B;
+                self.setStyleSheet(f"""
+                    QPushButton {{
+                        border: 2px solid {colors['expense']};
                         border-radius: 6px;
                         padding: 6px 10px;
-                        background-color: white;
-                        color: #333;
+                        background-color: {colors['card_background']};
+                        color: {colors['primary_text']};
                         font-size: 11px;
                         font-weight: bold;
                         min-height: 25px;
                         max-height: 25px;
                         min-width: 60px;
                         max-width: 100px;
-                    }
-                    QPushButton:hover {
-                        background-color: #FFE0E0;
-                        border-color: #FF5252;
-                    }
+                    }}
+                    QPushButton:hover {{
+                        background-color: {colors['hover']};
+                        border-color: {colors['expense']};
+                    }}
                 """)
     
     def set_selected(self, selected):
@@ -2549,6 +3247,9 @@ class StatisticsWidget(QWidget):
     
     def create_summary_card(self, title, color, bg_color):
         """创建汇总卡片"""
+        # 使用主题颜色
+        colors = theme_manager.get_current_theme()["colors"]
+        
         card = QGroupBox()
         card.setStyleSheet(f"""
             QGroupBox {{
@@ -2593,29 +3294,50 @@ class StatisticsWidget(QWidget):
         figure.clear()
         ax = figure.add_subplot(111)
         
+        # 获取主题颜色
+        theme_colors = theme_manager.get_color('chart_colors')
+        theme_bg = theme_manager.get_color('background')
+        theme_text = theme_manager.get_color('primary_text')
+        theme_border = theme_manager.get_color('border')
+        
         if not data or sum(data) == 0:
-            ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, fontsize=12)
-            ax.set_title(title, fontsize=14, fontweight='bold')
+            ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, 
+                   fontsize=12, color=theme_text)
+            ax.set_title(title, fontsize=14, fontweight='bold', color=theme_text)
             return
         
         # 设置颜色
         if colors is None:
-            colors = plt.cm.Set3(range(len(data)))
+            # 使用主题图表颜色
+            import matplotlib.colors as mcolors
+            colors = []
+            for i in range(len(data)):
+                if i < len(theme_colors):
+                    # 解析十六进制颜色
+                    hex_color = theme_colors[i].lstrip('#')
+                    rgb = tuple(int(hex_color[i:i+2], 16)/255.0 for i in (0, 2, 4))
+                    colors.append(rgb)
+                else:
+                    colors.append(plt.cm.Set3(i))
         
         # 创建圆环图（通过设置wedgeprops来实现）
         wedges, texts, autotexts = ax.pie(data, labels=labels, colors=colors, autopct='%1.1f%%', 
-                                         startangle=90, textprops={'fontsize': 9},
-                                         wedgeprops=dict(width=0.6, edgecolor='white', linewidth=2))
+                                         startangle=90, textprops={'fontsize': 9, 'color': theme_text},
+                                         wedgeprops=dict(width=0.6, edgecolor=theme_bg, linewidth=2))
         
-        # 在中心添加白色圆圈形成圆环效果
-        centre_circle = plt.Circle((0, 0), 0.40, fc='white', linewidth=2, edgecolor='lightgray')
+        # 在中心添加圆圈形成圆环效果
+        centre_circle = plt.Circle((0, 0), 0.40, fc=theme_bg, linewidth=2, edgecolor=theme_border)
         ax.add_artist(centre_circle)
         
         # 设置标题
-        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+        ax.set_title(title, fontsize=14, fontweight='bold', pad=20, color=theme_text)
         
         # 确保圆环图是圆形
         ax.axis('equal')
+        
+        # 设置背景色
+        figure.patch.set_facecolor(theme_bg)
+        ax.set_facecolor(theme_bg)
         
         figure.tight_layout()
     
@@ -2712,10 +3434,137 @@ class MainWindow(QMainWindow):
         self.ledgers = {}
         self.setup_ui()
         self.load_ledgers()
+        self.apply_theme()
+    
+    def apply_theme(self):
+        """应用主题到整个应用"""
+        theme_manager.apply_theme_to_widget(self)
+        
+        # 更新所有子控件的主题
+        self.update_children_theme(self)
+    
+    def update_children_theme(self, widget):
+        """递归更新子控件主题"""
+        for child in widget.children():
+            if hasattr(child, 'setStyleSheet'):
+                # 特殊处理某些控件
+                if isinstance(child, QPushButton):
+                    self.update_button_theme(child)
+                elif isinstance(child, QTableWidget):
+                    self.update_table_theme(child)
+                elif hasattr(child, 'children'):
+                    self.update_children_theme(child)
+    
+    def update_button_theme(self, button):
+        """更新按钮主题"""
+        colors = theme_manager.get_current_theme()["colors"]
+        text = button.text()
+        
+        # 根据按钮文本设置不同颜色
+        if "收入" in text:
+            button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {colors['income']};
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {colors['hover']};
+                    border: 1px solid {colors['income']};
+                }}
+            """)
+        elif "支出" in text:
+            button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {colors['expense']};
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {colors['hover']};
+                    border: 1px solid {colors['expense']};
+                }}4
+            """)
+        elif "删除" in text:
+            button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {colors['danger']};
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {colors['hover']};
+                    border: 1px solid {colors['danger']};
+                }}
+            """)
+        else:
+            # 默认按钮样式
+            button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {colors['accent']};
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {colors['hover']};
+                    border: 1px solid {colors['accent']};
+                }}
+            """)
+    
+    def update_table_theme(self, table):
+        """更新表格主题"""
+        colors = theme_manager.get_current_theme()["colors"]
+        table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {colors['card_background']};
+                alternate-background-color: {colors['secondary_background']};
+                gridline-color: {colors['border']};
+                selection-background-color: {colors['accent']};
+            }}
+            QTableWidget::item {{
+                padding: 5px;
+                color: {colors['primary_text']};
+            }}
+            QTableWidget::item:selected {{
+                background-color: {colors['accent']};
+                color: white;
+            }}
+            QHeaderView::section {{
+                background-color: {colors['secondary_background']};
+                color: {colors['primary_text']};
+                padding: 5px;
+                border: 1px solid {colors['border']};
+                font-weight: bold;
+            }}
+        """)
+    
+    def showEvent(self, event):
+        """窗口显示时应用主题"""
+        super().showEvent(event)
+        self.apply_theme()
         
     def setup_ui(self):
         self.setWindowTitle("多账本记账系统")
         self.setGeometry(100, 100, 1200, 800)
+        
+        # 创建菜单栏
+        self.create_menu_bar()
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -2737,6 +3586,40 @@ class MainWindow(QMainWindow):
         
         main_layout.addWidget(splitter)
         central_widget.setLayout(main_layout)
+    
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = self.menuBar()
+        
+        # 设置菜单
+        settings_menu = menubar.addMenu("设置")
+        
+        # 系统设置动作
+        system_settings_action = settings_menu.addAction("系统设置")
+        system_settings_action.triggered.connect(self.open_system_settings)
+        
+        # 主题设置动作
+        theme_settings_action = settings_menu.addAction("主题设置")
+        theme_settings_action.triggered.connect(self.open_theme_settings)
+        
+        settings_menu.addSeparator()
+        
+        # 退出动作
+        exit_action = settings_menu.addAction("退出")
+        exit_action.triggered.connect(self.close)
+    
+    def open_system_settings(self):
+        """打开系统设置"""
+        dialog = SystemSettingsDialog(self)
+        dialog.exec()
+        self.apply_theme()  # 重新应用主题
+    
+    def open_theme_settings(self):
+        """打开主题设置"""
+        dialog = ThemeSelectionDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.apply_theme()
+            QMessageBox.information(self, "成功", "主题已成功应用！")
     
     def create_ledger_panel(self):
         widget = QWidget()
@@ -3499,8 +4382,14 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    
+    # 设置应用程序样式
+    app.setStyle('Fusion')
+    
+    # 创建主窗口
     window = MainWindow()
     window.show()
+    
     sys.exit(app.exec())
 
 if __name__ == "__main__":
