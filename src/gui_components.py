@@ -243,11 +243,12 @@ class EditExpenseDialog(QDialog):
             self.show_subcategories(category)
     
     def show_subcategories(self, category):
-        # 清除之前的子类别按钮
-        for i in reversed(range(self.subcategory_grid_layout.count())):
-            child = self.subcategory_grid_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
+        # 清除之前的子类别按钮 - 安全释放内存
+        while self.subcategory_grid_layout.count():
+            item = self.subcategory_grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         
         # 添加新的子类别按钮 - 使用横向布局
         if category in self.subcategories:
@@ -509,11 +510,12 @@ class AddExpenseDialog(QDialog):
             self.show_subcategories(category)
     
     def show_subcategories(self, category):
-        # 清除之前的子类别按钮
-        for i in reversed(range(self.subcategory_grid_layout.count())):
-            child = self.subcategory_grid_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
+        # 清除之前的子类别按钮 - 安全释放内存
+        while self.subcategory_grid_layout.count():
+            item = self.subcategory_grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         
         # 添加新的子类别按钮 - 使用横向布局
         if category in self.subcategories:
@@ -1301,11 +1303,12 @@ class EditIncomeDialog(QDialog):
             self.show_subcategories(category)
     
     def show_subcategories(self, category):
-        # 清除之前的子类别按钮
-        for i in reversed(range(self.subcategory_grid_layout.count())):
-            child = self.subcategory_grid_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
+        # 清除之前的子类别按钮 - 安全释放内存
+        while self.subcategory_grid_layout.count():
+            item = self.subcategory_grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         
         # 添加新的子类别按钮 - 使用横向布局
         if category in self.subcategories:
@@ -1550,11 +1553,12 @@ class AddIncomeDialog(QDialog):
             self.show_subcategories(category)
     
     def show_subcategories(self, category):
-        # 清除之前的子类别按钮
-        for i in reversed(range(self.subcategory_grid_layout.count())):
-            child = self.subcategory_grid_layout.itemAt(i).widget()
-            if child:
-                child.setParent(None)
+        # 清除之前的子类别按钮 - 安全释放内存
+        while self.subcategory_grid_layout.count():
+            item = self.subcategory_grid_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         
         # 添加新的子类别按钮 - 使用横向布局
         if category in self.subcategories:

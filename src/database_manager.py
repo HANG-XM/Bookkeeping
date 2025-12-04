@@ -24,8 +24,26 @@ class DatabaseManager:
     def close_connection(self):
         """关闭当前线程的数据库连接"""
         if hasattr(self._local, 'connection'):
-            self._local.connection.close()
-            delattr(self._local, 'connection')
+            try:
+                self._local.connection.close()
+            except:
+                pass  # 忽略关闭时的错误
+            finally:
+                delattr(self._local, 'connection')
+    
+    def cleanup_all_connections(self):
+        """清理所有线程的数据库连接"""
+        # 注意：threading.local无法直接清理所有线程的连接
+        # 这个方法主要用于应用退出时的资源清理
+        if hasattr(self._local, 'connection'):
+            self.close_connection()
+    
+    def __del__(self):
+        """析构函数，确保连接被清理"""
+        try:
+            self.cleanup_all_connections()
+        except:
+            pass  # 忽略析构时的错误
     
     def init_database(self):
         with self.get_connection() as conn:
@@ -213,228 +231,212 @@ class DatabaseManager:
     
     def add_transaction(self, ledger_id, transaction_date, transaction_type, category, subcategory, 
                        amount, account, description, is_settled, refund_amount, refund_reason):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute('''
-            INSERT INTO transactions 
-            (ledger_id, transaction_date, transaction_type, category, subcategory, amount, account, 
-             description, is_settled, refund_amount, refund_reason, created_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (ledger_id, transaction_date, transaction_type, category, subcategory, amount, account,
-              description, is_settled, refund_amount, refund_reason, created_time))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute('''
+                INSERT INTO transactions 
+                (ledger_id, transaction_date, transaction_type, category, subcategory, amount, account, 
+                 description, is_settled, refund_amount, refund_reason, created_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (ledger_id, transaction_date, transaction_type, category, subcategory, amount, account,
+                  description, is_settled, refund_amount, refund_reason, created_time))
+            conn.commit()
     
     def get_transactions(self, ledger_id):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM transactions WHERE ledger_id = ? 
-            ORDER BY transaction_date DESC, created_time DESC
-        ''', (ledger_id,))
-        transactions = cursor.fetchall()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM transactions WHERE ledger_id = ? 
+                ORDER BY transaction_date DESC, created_time DESC
+            ''', (ledger_id,))
+            transactions = cursor.fetchall()
         return transactions
     
     def add_account(self, name, account_type, balance=0.0, bank=None, description=None):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO accounts (name, type, balance, bank, description)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (name, account_type, balance, bank, description))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO accounts (name, type, balance, bank, description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, account_type, balance, bank, description))
+            conn.commit()
     
     def add_account_without_ledger(self, name, account_type, balance=0.0, bank=None, description=None):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO accounts (name, type, balance, bank, description)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (name, account_type, balance, bank, description))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO accounts (name, type, balance, bank, description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, account_type, balance, bank, description))
+            conn.commit()
     
     def update_account(self, account_id, name, account_type, balance, bank, description):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE accounts SET name = ?, type = ?, balance = ?, bank = ?, description = ?
-            WHERE id = ?
-        ''', (name, account_type, balance, bank, description, account_id))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE accounts SET name = ?, type = ?, balance = ?, bank = ?, description = ?
+                WHERE id = ?
+            ''', (name, account_type, balance, bank, description, account_id))
+            conn.commit()
     
     def delete_account(self, account_id):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM accounts WHERE id = ?', (account_id,))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM accounts WHERE id = ?', (account_id,))
+            conn.commit()
     
     def update_transaction(self, transaction_id, transaction_date, transaction_type, category, 
                          subcategory, amount, account, description, is_settled, refund_amount, refund_reason):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE transactions SET 
-                transaction_date = ?, transaction_type = ?, category = ?, subcategory = ?,
-                amount = ?, account = ?, description = ?, is_settled = ?, 
-                refund_amount = ?, refund_reason = ?
-            WHERE id = ?
-        ''', (transaction_date, transaction_type, category, subcategory, amount, account,
-              description, is_settled, refund_amount, refund_reason, transaction_id))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE transactions SET 
+                    transaction_date = ?, transaction_type = ?, category = ?, subcategory = ?,
+                    amount = ?, account = ?, description = ?, is_settled = ?, 
+                    refund_amount = ?, refund_reason = ?
+                WHERE id = ?
+            ''', (transaction_date, transaction_type, category, subcategory, amount, account,
+                  description, is_settled, refund_amount, refund_reason, transaction_id))
+            conn.commit()
     
     def delete_transaction(self, transaction_id):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
+            conn.commit()
     
     def get_accounts(self):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM accounts ORDER BY name')
-        accounts = cursor.fetchall()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM accounts ORDER BY name')
+            accounts = cursor.fetchall()
         return accounts
     
     def update_account_balance(self, account_name, amount_change):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            UPDATE accounts SET balance = balance + ? WHERE name = ?
-        ''', (amount_change, account_name))
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE accounts SET balance = balance + ? WHERE name = ?
+            ''', (amount_change, account_name))
+            conn.commit()
     
     def get_account_balance(self, account_name):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT balance FROM accounts WHERE name = ?', (account_name,))
-        result = cursor.fetchone()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT balance FROM accounts WHERE name = ?', (account_name,))
+            result = cursor.fetchone()
         return result[0] if result else 0.0
     
     def add_transfer(self, transfer_date, from_account, to_account, amount, description):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # 添加转账记录
-        cursor.execute('''
-            INSERT INTO transfers (transfer_date, from_account, to_account, amount, description, created_time)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (transfer_date, from_account, to_account, amount, description, created_time))
-        
-        # 更新账户余额
-        cursor.execute('''
-            UPDATE accounts SET balance = balance - ? WHERE name = ?
-        ''', (amount, from_account))
-        
-        cursor.execute('''
-            UPDATE accounts SET balance = balance + ? WHERE name = ?
-        ''', (amount, to_account))
-        
-        conn.commit()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            created_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # 添加转账记录
+            cursor.execute('''
+                INSERT INTO transfers (transfer_date, from_account, to_account, amount, description, created_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (transfer_date, from_account, to_account, amount, description, created_time))
+            
+            # 更新账户余额
+            cursor.execute('''
+                UPDATE accounts SET balance = balance - ? WHERE name = ?
+            ''', (amount, from_account))
+            
+            cursor.execute('''
+                UPDATE accounts SET balance = balance + ? WHERE name = ?
+            ''', (amount, to_account))
+            
+            conn.commit()
     
     def get_transfers(self):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM transfers ORDER BY transfer_date DESC, created_time DESC
-        ''')
-        transfers = cursor.fetchall()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT * FROM transfers ORDER BY transfer_date DESC, created_time DESC
+            ''')
+            transfers = cursor.fetchall()
         return transfers
     
     def get_transactions_by_date_range(self, start_date, end_date, ledger_id=None):
         """获取指定日期范围内的交易记录"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if ledger_id:
-            cursor.execute('''
-                SELECT * FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
-                ORDER BY transaction_date DESC, created_time DESC
-            ''', (start_date, end_date, ledger_id))
-        else:
-            cursor.execute('''
-                SELECT * FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ?
-                ORDER BY transaction_date DESC, created_time DESC
-            ''', (start_date, end_date))
-        
-        transactions = cursor.fetchall()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ledger_id:
+                cursor.execute('''
+                    SELECT * FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
+                    ORDER BY transaction_date DESC, created_time DESC
+                ''', (start_date, end_date, ledger_id))
+            else:
+                cursor.execute('''
+                    SELECT * FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ?
+                    ORDER BY transaction_date DESC, created_time DESC
+                ''', (start_date, end_date))
+            
+            transactions = cursor.fetchall()
         return transactions
     
     def get_statistics_summary(self, start_date, end_date, ledger_id=None):
         """获取收支汇总统计"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if ledger_id:
-            # 获取收入总额和退款
-            cursor.execute('''
-                SELECT 
-                    SUM(CASE WHEN transaction_type = "收入" THEN amount ELSE 0 END) as gross_income,
-                    SUM(CASE WHEN transaction_type = "收入" THEN refund_amount ELSE 0 END) as total_refund
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
-            ''', (start_date, end_date, ledger_id))
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
             
-            income_result = cursor.fetchone()
-            gross_income = income_result[0] or 0.0
-            total_refund = income_result[1] or 0.0
-            
-            # 获取支出总额和退款报销
-            cursor.execute('''
-                SELECT 
-                    SUM(CASE WHEN transaction_type = "支出" THEN amount ELSE 0 END) as gross_expense,
-                    SUM(CASE WHEN transaction_type = "支出" THEN refund_amount ELSE 0 END) as expense_refund
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
-            ''', (start_date, end_date, ledger_id))
-            
-            expense_result = cursor.fetchone()
-            gross_expense = expense_result[0] or 0.0
-            expense_refund = expense_result[1] or 0.0
-        else:
-            # 获取收入总额和退款
-            cursor.execute('''
-                SELECT 
-                    SUM(CASE WHEN transaction_type = "收入" THEN amount ELSE 0 END) as gross_income,
-                    SUM(CASE WHEN transaction_type = "收入" THEN refund_amount ELSE 0 END) as total_refund
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ?
-            ''', (start_date, end_date))
-            
-            income_result = cursor.fetchone()
-            gross_income = income_result[0] or 0.0
-            total_refund = income_result[1] or 0.0
-            
-            # 获取支出总额和退款报销
-            cursor.execute('''
-                SELECT 
-                    SUM(CASE WHEN transaction_type = "支出" THEN amount ELSE 0 END) as gross_expense,
-                    SUM(CASE WHEN transaction_type = "支出" THEN refund_amount ELSE 0 END) as expense_refund
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ?
-            ''', (start_date, end_date))
-            
-            expense_result = cursor.fetchone()
-            gross_expense = expense_result[0] or 0.0
-            expense_refund = expense_result[1] or 0.0
-        
-        conn.close()
+            if ledger_id:
+                # 获取收入总额和退款
+                cursor.execute('''
+                    SELECT 
+                        SUM(CASE WHEN transaction_type = "收入" THEN amount ELSE 0 END) as gross_income,
+                        SUM(CASE WHEN transaction_type = "收入" THEN refund_amount ELSE 0 END) as total_refund
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
+                ''', (start_date, end_date, ledger_id))
+                
+                income_result = cursor.fetchone()
+                gross_income = income_result[0] or 0.0
+                total_refund = income_result[1] or 0.0
+                
+                # 获取支出总额和退款报销
+                cursor.execute('''
+                    SELECT 
+                        SUM(CASE WHEN transaction_type = "支出" THEN amount ELSE 0 END) as gross_expense,
+                        SUM(CASE WHEN transaction_type = "支出" THEN refund_amount ELSE 0 END) as expense_refund
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
+                ''', (start_date, end_date, ledger_id))
+                
+                expense_result = cursor.fetchone()
+                gross_expense = expense_result[0] or 0.0
+                expense_refund = expense_result[1] or 0.0
+            else:
+                # 获取收入总额和退款
+                cursor.execute('''
+                    SELECT 
+                        SUM(CASE WHEN transaction_type = "收入" THEN amount ELSE 0 END) as gross_income,
+                        SUM(CASE WHEN transaction_type = "收入" THEN refund_amount ELSE 0 END) as total_refund
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ?
+                ''', (start_date, end_date))
+                
+                income_result = cursor.fetchone()
+                gross_income = income_result[0] or 0.0
+                total_refund = income_result[1] or 0.0
+                
+                # 获取支出总额和退款报销
+                cursor.execute('''
+                    SELECT 
+                        SUM(CASE WHEN transaction_type = "支出" THEN amount ELSE 0 END) as gross_expense,
+                        SUM(CASE WHEN transaction_type = "支出" THEN refund_amount ELSE 0 END) as expense_refund
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ?
+                ''', (start_date, end_date))
+                
+                expense_result = cursor.fetchone()
+                gross_expense = expense_result[0] or 0.0
+                expense_refund = expense_result[1] or 0.0
         
         # 实际收入 = 收入总额 - 退款总额
         actual_income = gross_income - total_refund
@@ -457,95 +459,92 @@ class DatabaseManager:
     
     def get_category_statistics(self, start_date, end_date, transaction_type, level="parent", ledger_id=None):
         """获取类别统计"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if level == "parent":
-            category_field = "category"
-        else:
-            category_field = "subcategory"
-        
-        if ledger_id:
-            cursor.execute(f'''
-                SELECT {category_field}, SUM(ABS(amount)) as amount, COUNT(*) as count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = ?
-                GROUP BY {category_field}
-                ORDER BY amount DESC
-            ''', (start_date, end_date, ledger_id, transaction_type))
-        else:
-            cursor.execute(f'''
-                SELECT {category_field}, SUM(ABS(amount)) as amount, COUNT(*) as count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND transaction_type = ?
-                GROUP BY {category_field}
-                ORDER BY amount DESC
-            ''', (start_date, end_date, transaction_type))
-        
-        results = cursor.fetchall()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if level == "parent":
+                category_field = "category"
+            else:
+                category_field = "subcategory"
+            
+            if ledger_id:
+                cursor.execute(f'''
+                    SELECT {category_field}, SUM(ABS(amount)) as amount, COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = ?
+                    GROUP BY {category_field}
+                    ORDER BY amount DESC
+                ''', (start_date, end_date, ledger_id, transaction_type))
+            else:
+                cursor.execute(f'''
+                    SELECT {category_field}, SUM(ABS(amount)) as amount, COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND transaction_type = ?
+                    GROUP BY {category_field}
+                    ORDER BY amount DESC
+                ''', (start_date, end_date, transaction_type))
+            
+            results = cursor.fetchall()
         return results
     
     def get_account_statistics(self, start_date, end_date, ledger_id=None):
         """获取账户统计"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if ledger_id:
-            cursor.execute('''
-                SELECT account, 
-                       SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
-                       SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
-                       COUNT(*) as count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND account IS NOT NULL AND account != ''
-                GROUP BY account
-                ORDER BY (income + expense) DESC
-            ''', (start_date, end_date, ledger_id))
-        else:
-            cursor.execute('''
-                SELECT account, 
-                       SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
-                       SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
-                       COUNT(*) as count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND account IS NOT NULL AND account != ''
-                GROUP BY account
-                ORDER BY (income + expense) DESC
-            ''', (start_date, end_date))
-        
-        results = cursor.fetchall()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ledger_id:
+                cursor.execute('''
+                    SELECT account, 
+                           SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                           SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                           COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND account IS NOT NULL AND account != ''
+                    GROUP BY account
+                    ORDER BY (income + expense) DESC
+                ''', (start_date, end_date, ledger_id))
+            else:
+                cursor.execute('''
+                    SELECT account, 
+                           SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                           SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                           COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND account IS NOT NULL AND account != ''
+                    GROUP BY account
+                    ORDER BY (income + expense) DESC
+                ''', (start_date, end_date))
+            
+            results = cursor.fetchall()
         return results
     
     def get_settlement_statistics(self, start_date, end_date, ledger_id=None):
         """获取销账状态统计"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if ledger_id:
-            cursor.execute('''
-                SELECT 
-                    is_settled,
-                    SUM(ABS(amount)) as amount,
-                    COUNT(*) as count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = '支出'
-                GROUP BY is_settled
-            ''', (start_date, end_date, ledger_id))
-        else:
-            cursor.execute('''
-                SELECT 
-                    is_settled,
-                    SUM(ABS(amount)) as amount,
-                    COUNT(*) as count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND transaction_type = '支出'
-                GROUP BY is_settled
-            ''', (start_date, end_date))
-        
-        results = cursor.fetchall()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ledger_id:
+                cursor.execute('''
+                    SELECT 
+                        is_settled,
+                        SUM(ABS(amount)) as amount,
+                        COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = '支出'
+                    GROUP BY is_settled
+                ''', (start_date, end_date, ledger_id))
+            else:
+                cursor.execute('''
+                    SELECT 
+                        is_settled,
+                        SUM(ABS(amount)) as amount,
+                        COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND transaction_type = '支出'
+                    GROUP BY is_settled
+                ''', (start_date, end_date))
+            
+            results = cursor.fetchall()
         
         settled_amount = 0.0
         unsettled_amount = 0.0
@@ -564,32 +563,31 @@ class DatabaseManager:
     
     def get_refund_statistics(self, start_date, end_date, ledger_id=None):
         """获取退款统计"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if ledger_id:
-            cursor.execute('''
-                SELECT 
-                    SUM(refund_amount) as total_refund,
-                    COUNT(CASE WHEN refund_amount > 0 THEN 1 END) as refund_count,
-                    SUM(ABS(amount)) as total_amount,
-                    COUNT(*) as total_count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = '支出'
-            ''', (start_date, end_date, ledger_id))
-        else:
-            cursor.execute('''
-                SELECT 
-                    SUM(refund_amount) as total_refund,
-                    COUNT(CASE WHEN refund_amount > 0 THEN 1 END) as refund_count,
-                    SUM(ABS(amount)) as total_amount,
-                    COUNT(*) as total_count
-                FROM transactions 
-                WHERE transaction_date BETWEEN ? AND ? AND transaction_type = '支出'
-            ''', (start_date, end_date))
-        
-        result = cursor.fetchone()
-        conn.close()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ledger_id:
+                cursor.execute('''
+                    SELECT 
+                        SUM(refund_amount) as total_refund,
+                        COUNT(CASE WHEN refund_amount > 0 THEN 1 END) as refund_count,
+                        SUM(ABS(amount)) as total_amount,
+                        COUNT(*) as total_count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ? AND transaction_type = '支出'
+                ''', (start_date, end_date, ledger_id))
+            else:
+                cursor.execute('''
+                    SELECT 
+                        SUM(refund_amount) as total_refund,
+                        COUNT(CASE WHEN refund_amount > 0 THEN 1 END) as refund_count,
+                        SUM(ABS(amount)) as total_amount,
+                        COUNT(*) as total_count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND transaction_type = '支出'
+                ''', (start_date, end_date))
+            
+            result = cursor.fetchone()
         
         if result and result[0]:
             return {

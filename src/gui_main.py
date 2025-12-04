@@ -869,55 +869,65 @@ class StatisticsWidget(QWidget):
     
     def create_pie_chart(self, figure, data, labels, title, colors=None):
         """创建圆环图"""
-        figure.clear()
-        ax = figure.add_subplot(111)
-        
-        # 获取主题颜色
-        theme_colors = theme_manager.get_color('chart_colors')
-        theme_bg = theme_manager.get_color('background')
-        theme_text = theme_manager.get_color('primary_text')
-        theme_border = theme_manager.get_color('border')
-        
-        if not data or sum(data) == 0:
-            ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, 
-                   fontsize=12, color=theme_text)
-            ax.set_title(title, fontsize=14, fontweight='bold', color=theme_text)
-            return
-        
-        # 设置颜色
-        if colors is None:
-            # 使用主题图表颜色
-            import matplotlib.colors as mcolors
-            colors = []
-            for i in range(len(data)):
-                if i < len(theme_colors):
-                    # 解析十六进制颜色
-                    hex_color = theme_colors[i].lstrip('#')
-                    rgb = tuple(int(hex_color[i:i+2], 16)/255.0 for i in (0, 2, 4))
-                    colors.append(rgb)
-                else:
-                    colors.append(plt.cm.Set3(i))
-        
-        # 创建圆环图（通过设置wedgeprops来实现）
-        wedges, texts, autotexts = ax.pie(data, labels=labels, colors=colors, autopct='%1.1f%%', 
-                                         startangle=90, textprops={'fontsize': 9, 'color': theme_text},
-                                         wedgeprops=dict(width=0.6, edgecolor=theme_bg, linewidth=2))
-        
-        # 在中心添加圆圈形成圆环效果
-        centre_circle = plt.Circle((0, 0), 0.40, fc=theme_bg, linewidth=2, edgecolor=theme_border)
-        ax.add_artist(centre_circle)
-        
-        # 设置标题
-        ax.set_title(title, fontsize=14, fontweight='bold', pad=20, color=theme_text)
-        
-        # 确保圆环图是圆形
-        ax.axis('equal')
-        
-        # 设置背景色
-        figure.patch.set_facecolor(theme_bg)
-        ax.set_facecolor(theme_bg)
-        
-        figure.tight_layout()
+        try:
+            # 清理之前的图形对象以释放内存
+            figure.clear()
+            ax = figure.add_subplot(111)
+            
+            # 获取主题颜色
+            theme_colors = theme_manager.get_color('chart_colors')
+            theme_bg = theme_manager.get_color('background')
+            theme_text = theme_manager.get_color('primary_text')
+            theme_border = theme_manager.get_color('border')
+            
+            if not data or sum(data) == 0:
+                ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, 
+                       fontsize=12, color=theme_text)
+                ax.set_title(title, fontsize=14, fontweight='bold', color=theme_text)
+                return
+            
+            # 设置颜色
+            if colors is None:
+                # 使用主题图表颜色
+                import matplotlib.colors as mcolors
+                colors = []
+                for i in range(len(data)):
+                    if i < len(theme_colors):
+                        # 解析十六进制颜色
+                        hex_color = theme_colors[i].lstrip('#')
+                        rgb = tuple(int(hex_color[i:i+2], 16)/255.0 for i in (0, 2, 4))
+                        colors.append(rgb)
+                    else:
+                        colors.append(plt.cm.Set3(i))
+            
+            # 创建圆环图（通过设置wedgeprops来实现）
+            wedges, texts, autotexts = ax.pie(data, labels=labels, colors=colors, autopct='%1.1f%%', 
+                                             startangle=90, textprops={'fontsize': 9, 'color': theme_text},
+                                             wedgeprops=dict(width=0.6, edgecolor=theme_bg, linewidth=2))
+            
+            # 在中心添加圆圈形成圆环效果
+            centre_circle = plt.Circle((0, 0), 0.40, fc=theme_bg, linewidth=2, edgecolor=theme_border)
+            ax.add_artist(centre_circle)
+            
+            # 设置标题
+            ax.set_title(title, fontsize=14, fontweight='bold', pad=20, color=theme_text)
+            
+            # 确保圆环图是圆形
+            ax.axis('equal')
+            
+            # 设置背景色
+            figure.patch.set_facecolor(theme_bg)
+            ax.set_facecolor(theme_bg)
+            
+            figure.tight_layout()
+        except Exception as e:
+            # 如果绘图出错，创建一个简单的错误显示
+            figure.clear()
+            ax = figure.add_subplot(111)
+            ax.text(0.5, 0.5, f'图表加载错误\n{str(e)}', ha='center', va='center', 
+                   transform=ax.transAxes, fontsize=12, color='red')
+            ax.set_title(title, fontsize=14, fontweight='bold')
+            ax.axis('off')
     
     def update_statistics(self):
         """更新统计数据"""

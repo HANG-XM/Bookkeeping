@@ -336,6 +336,12 @@ class ThemeManager:
         # 设置图表样式
         plt.style.use('default')  # 重置样式
         
+        # 清理之前的图形对象
+        try:
+            plt.close('all')  # 关闭所有图形以释放内存
+        except:
+            pass
+        
         # 设置字体和颜色（只使用有效的参数）
         matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
         matplotlib.rcParams['axes.unicode_minus'] = False

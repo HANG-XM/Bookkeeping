@@ -2,6 +2,7 @@ import sys
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QSettings
 from gui_main import MainWindow
+from theme_manager import theme_manager
 
 def main():
     app = QApplication(sys.argv)
@@ -40,9 +41,23 @@ def main():
     settings.setValue("geometry", window.saveGeometry())
     settings.setValue("windowState", window.saveState())
     
-    # 清理数据库连接
-    if hasattr(window, 'db_manager'):
-        window.db_manager.close_connection()
+    # 清理资源
+    try:
+        # 清理数据库连接
+        if hasattr(window, 'db_manager'):
+            window.db_manager.cleanup_all_connections()
+        
+        # 清理matplotlib图形对象
+        import matplotlib.pyplot as plt
+        plt.close('all')
+        
+        # 清理主题管理器缓存
+        if hasattr(theme_manager, '_cached_style'):
+            delattr(theme_manager, '_cached_style')
+            
+    except Exception as e:
+        # 忽略清理时的错误，确保程序能够正常退出
+        print(f"清理资源时出现错误: {e}")
     
     sys.exit(exit_code)
 
