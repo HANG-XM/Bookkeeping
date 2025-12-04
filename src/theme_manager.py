@@ -133,191 +133,198 @@ class ThemeManager:
         theme = self.get_current_theme()
         return theme["colors"].get(color_name, "#000000")
     
+    def _get_cached_stylesheet(self):
+        """获取缓存的样式表"""
+        if not hasattr(self, '_cached_style') or self._cached_theme != self.current_theme:
+            colors = self.get_current_theme()["colors"]
+            
+            # 设置样式表
+            self._cached_style = f"""
+                QWidget {{
+                    background-color: {colors['background']};
+                    color: {colors['primary_text']};
+                    font-family: "Microsoft YaHei", "SimHei", Arial;
+                }}
+                
+                QMainWindow {{
+                    background-color: {colors['background']};
+                }}
+                
+                QGroupBox {{
+                    background-color: {colors['card_background']};
+                    border: 2px solid {colors['border']};
+                    border-radius: 8px;
+                    margin-top: 1ex;
+                    font-weight: bold;
+                    padding-top: 10px;
+                }}
+                
+                QGroupBox::title {{
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 5px 0 5px;
+                    color: {colors['primary_text']};
+                }}
+                
+                QPushButton {{
+                    background-color: {colors['accent']};
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    font-size: 12px;
+                }}
+                
+                QPushButton:hover {{
+                    background-color: {colors['hover']};
+                    border: 1px solid {colors['accent']};
+                }}
+                
+                QPushButton:pressed {{
+                    background-color: {colors['accent']};
+                }}
+                
+                QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+                    background-color: {colors['card_background']};
+                    border: 2px solid {colors['border']};
+                    border-radius: 4px;
+                    padding: 6px;
+                    color: {colors['primary_text']};
+                }}
+                
+                QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+                    border: 2px solid {colors['accent']};
+                }}
+                
+                QTableWidget {{
+                    background-color: {colors['card_background']};
+                    alternate-background-color: {colors['secondary_background']};
+                    gridline-color: {colors['border']};
+                    selection-background-color: {colors['accent']};
+                }}
+                
+                QTableWidget::item {{
+                    padding: 5px;
+                    color: {colors['primary_text']};
+                }}
+                
+                QTableWidget::item:selected {{
+                    background-color: {colors['accent']};
+                    color: white;
+                }}
+                
+                QHeaderView::section {{
+                    background-color: {colors['secondary_background']};
+                    color: {colors['primary_text']};
+                    padding: 5px;
+                    border: 1px solid {colors['border']};
+                    font-weight: bold;
+                }}
+                
+                QTabWidget::pane {{
+                    border: 1px solid {colors['border']};
+                    background-color: {colors['card_background']};
+                }}
+                
+                QTabBar::tab {{
+                    background-color: {colors['secondary_background']};
+                    color: {colors['primary_text']};
+                    padding: 8px 16px;
+                    margin-right: 2px;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                }}
+                
+                QTabBar::tab:selected {{
+                    background-color: {colors['accent']};
+                    color: white;
+                }}
+                
+                QTabBar::tab:hover {{
+                    background-color: {colors['hover']};
+                }}
+                
+                QScrollArea {{
+                    background-color: {colors['background']};
+                    border: none;
+                }}
+                
+                QLabel {{
+                    color: {colors['primary_text']};
+                }}
+                
+                QCheckBox {{
+                    color: {colors['primary_text']};
+                }}
+                
+                QCheckBox::indicator {{
+                    width: 18px;
+                    height: 18px;
+                    border: 2px solid {colors['border']};
+                    border-radius: 3px;
+                    background-color: {colors['card_background']};
+                }}
+                
+                QCheckBox::indicator:checked {{
+                    background-color: {colors['accent']};
+                    border-color: {colors['accent']};
+                }}
+                
+                QTreeWidget {{
+                    background-color: {colors['card_background']};
+                    border: 1px solid {colors['border']};
+                    selection-background-color: {colors['accent']};
+                }}
+                
+                QTreeWidget::item {{
+                    padding: 3px;
+                    color: {colors['primary_text']};
+                }}
+                
+                QTreeWidget::item:selected {{
+                    background-color: {colors['accent']};
+                    color: white;
+                }}
+                
+                QTreeWidget::item:hover {{
+                    background-color: {colors['hover']};
+                }}
+                
+                QDateEdit, QDateTimeEdit {{
+                    background-color: {colors['card_background']};
+                    border: 2px solid {colors['border']};
+                    border-radius: 4px;
+                    padding: 6px;
+                    color: {colors['primary_text']};
+                }}
+                
+                QCalendarWidget {{
+                    background-color: {colors['card_background']};
+                    color: {colors['primary_text']};
+                }}
+                
+                QCalendarWidget QToolButton {{
+                    background-color: {colors['secondary_background']};
+                    color: {colors['primary_text']};
+                    border: 1px solid {colors['border']};
+                    border-radius: 4px;
+                    margin: 2px;
+                }}
+                
+                QCalendarWidget QToolButton:hover {{
+                    background-color: {colors['accent']};
+                    color: white;
+                }}
+            """
+            self._cached_theme = self.current_theme
+        
+        return self._cached_style
+    
     def apply_theme_to_widget(self, widget):
         """将主题应用到控件"""
-        colors = self.get_current_theme()["colors"]
-        
-        # 设置样式表
-        style = f"""
-            QWidget {{
-                background-color: {colors['background']};
-                color: {colors['primary_text']};
-                font-family: "Microsoft YaHei", "SimHei", Arial;
-            }}
-            
-            QMainWindow {{
-                background-color: {colors['background']};
-            }}
-            
-            QGroupBox {{
-                background-color: {colors['card_background']};
-                border: 2px solid {colors['border']};
-                border-radius: 8px;
-                margin-top: 1ex;
-                font-weight: bold;
-                padding-top: 10px;
-            }}
-            
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-                color: {colors['primary_text']};
-            }}
-            
-            QPushButton {{
-                background-color: {colors['accent']};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 12px;
-            }}
-            
-            QPushButton:hover {{
-                background-color: {colors['hover']};
-                border: 1px solid {colors['accent']};
-            }}
-            
-            QPushButton:pressed {{
-                background-color: {colors['accent']};
-            }}
-            
-            QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
-                background-color: {colors['card_background']};
-                border: 2px solid {colors['border']};
-                border-radius: 4px;
-                padding: 6px;
-                color: {colors['primary_text']};
-            }}
-            
-            QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
-                border: 2px solid {colors['accent']};
-            }}
-            
-            QTableWidget {{
-                background-color: {colors['card_background']};
-                alternate-background-color: {colors['secondary_background']};
-                gridline-color: {colors['border']};
-                selection-background-color: {colors['accent']};
-            }}
-            
-            QTableWidget::item {{
-                padding: 5px;
-                color: {colors['primary_text']};
-            }}
-            
-            QTableWidget::item:selected {{
-                background-color: {colors['accent']};
-                color: white;
-            }}
-            
-            QHeaderView::section {{
-                background-color: {colors['secondary_background']};
-                color: {colors['primary_text']};
-                padding: 5px;
-                border: 1px solid {colors['border']};
-                font-weight: bold;
-            }}
-            
-            QTabWidget::pane {{
-                border: 1px solid {colors['border']};
-                background-color: {colors['card_background']};
-            }}
-            
-            QTabBar::tab {{
-                background-color: {colors['secondary_background']};
-                color: {colors['primary_text']};
-                padding: 8px 16px;
-                margin-right: 2px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-            }}
-            
-            QTabBar::tab:selected {{
-                background-color: {colors['accent']};
-                color: white;
-            }}
-            
-            QTabBar::tab:hover {{
-                background-color: {colors['hover']};
-            }}
-            
-            QScrollArea {{
-                background-color: {colors['background']};
-                border: none;
-            }}
-            
-            QLabel {{
-                color: {colors['primary_text']};
-            }}
-            
-            QCheckBox {{
-                color: {colors['primary_text']};
-            }}
-            
-            QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
-                border: 2px solid {colors['border']};
-                border-radius: 3px;
-                background-color: {colors['card_background']};
-            }}
-            
-            QCheckBox::indicator:checked {{
-                background-color: {colors['accent']};
-                border-color: {colors['accent']};
-            }}
-            
-            QTreeWidget {{
-                background-color: {colors['card_background']};
-                border: 1px solid {colors['border']};
-                selection-background-color: {colors['accent']};
-            }}
-            
-            QTreeWidget::item {{
-                padding: 3px;
-                color: {colors['primary_text']};
-            }}
-            
-            QTreeWidget::item:selected {{
-                background-color: {colors['accent']};
-                color: white;
-            }}
-            
-            QTreeWidget::item:hover {{
-                background-color: {colors['hover']};
-            }}
-            
-            QDateEdit, QDateTimeEdit {{
-                background-color: {colors['card_background']};
-                border: 2px solid {colors['border']};
-                border-radius: 4px;
-                padding: 6px;
-                color: {colors['primary_text']};
-            }}
-            
-            QCalendarWidget {{
-                background-color: {colors['card_background']};
-                color: {colors['primary_text']};
-            }}
-            
-            QCalendarWidget QToolButton {{
-                background-color: {colors['secondary_background']};
-                color: {colors['primary_text']};
-                border: 1px solid {colors['border']};
-                border-radius: 4px;
-                margin: 2px;
-            }}
-            
-            QCalendarWidget QToolButton:hover {{
-                background-color: {colors['accent']};
-                color: white;
-            }}
-        """
-        
-        widget.setStyleSheet(style)
+        # 使用缓存的样式表
+        widget.setStyleSheet(self._get_cached_stylesheet())
         
         # 更新matplotlib图表颜色
         self.update_matplotlib_colors()

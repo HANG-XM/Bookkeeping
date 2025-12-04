@@ -923,86 +923,97 @@ class StatisticsWidget(QWidget):
         """更新统计数据"""
         start_date, end_date = self.get_date_range()
         
-        # 获取收支汇总
-        summary = self.db_manager.get_statistics_summary(start_date, end_date)
+        # 禁用UI更新以提高性能
+        self.setUpdatesEnabled(False)
         
-        # 更新卡片显示
-        self.income_card_amount.setText(f"¥{summary['total_income']:.2f}")
-        self.expense_card_amount.setText(f"¥{summary['total_expense']:.2f}")
-        self.net_card_amount.setText(f"¥{summary['net_income']:.2f}")
+        try:
+            # 获取收支汇总
+            summary = self.db_manager.get_statistics_summary(start_date, end_date)
+            
+            # 更新卡片显示
+            self.income_card_amount.setText(f"¥{summary['total_income']:.2f}")
+            self.expense_card_amount.setText(f"¥{summary['total_expense']:.2f}")
+            self.net_card_amount.setText(f"¥{summary['net_income']:.2f}")
+            
+            if self.show_chinese_amount:
+                self.income_card_chinese.setText(number_to_chinese(summary['total_income']))
+                self.expense_card_chinese.setText(number_to_chinese(summary['total_expense']))
+                self.net_card_chinese.setText(number_to_chinese(abs(summary['net_income'])))
+            else:
+                self.income_card_chinese.setText("")
+                self.expense_card_chinese.setText("")
+                self.net_card_chinese.setText("")
+            
+            # 批量获取统计数据以减少数据库连接
+            income_stats = self.db_manager.get_category_statistics(start_date, end_date, "收入", self.category_level)
+            expense_stats = self.db_manager.get_category_statistics(start_date, end_date, "支出", self.category_level)
+            account_stats = self.db_manager.get_account_statistics(start_date, end_date)
+            settlement_stats = self.db_manager.get_settlement_statistics(start_date, end_date)
+            refund_stats = self.db_manager.get_refund_statistics(start_date, end_date)
+            
+            # 更新收入结构饼图
+            if income_stats and summary['total_income'] > 0:
+                income_labels = [item[0] for item in income_stats]
+                income_data = [item[1] for item in income_stats]
+                # 限制显示前8个类别，其余合并为"其他"
+                if len(income_labels) > 8:
+                    other_amount = sum(income_data[8:])
+                    income_labels = income_labels[:8] + ["其他"]
+                    income_data = income_data[:8] + [other_amount]
+                self.create_pie_chart(self.income_figure, income_data, income_labels, "收入结构")
+            else:
+                self.create_pie_chart(self.income_figure, [], [], "收入结构")
+            
+            # 更新支出结构饼图
+            if expense_stats and summary['total_expense'] > 0:
+                expense_labels = [item[0] for item in expense_stats]
+                expense_data = [item[1] for item in expense_stats]
+                # 限制显示前8个类别，其余合并为"其他"
+                if len(expense_labels) > 8:
+                    other_amount = sum(expense_data[8:])
+                    expense_labels = expense_labels[:8] + ["其他"]
+                    expense_data = expense_data[:8] + [other_amount]
+                self.create_pie_chart(self.expense_figure, expense_data, expense_labels, "支出结构")
+            else:
+                self.create_pie_chart(self.expense_figure, [], [], "支出结构")
+            
+            # 更新账户分布饼图
+            if account_stats:
+                account_labels = [item[0] for item in account_stats]
+                account_data = [item[1] + item[2] for item in account_stats]  # 收入+支出
+                # 限制显示前6个账户，其余合并为"其他"
+                if len(account_labels) > 6:
+                    other_amount = sum(account_data[6:])
+                    account_labels = account_labels[:6] + ["其他"]
+                    account_data = account_data[:6] + [other_amount]
+                self.create_pie_chart(self.account_figure, account_data, account_labels, "账户分布")
+            else:
+                self.create_pie_chart(self.account_figure, [], [], "账户分布")
+            
+            # 批量刷新画布
+            self.income_canvas.draw()
+            self.expense_canvas.draw()
+            self.account_canvas.draw()
+            
+            # 更新销账状态统计
+            self.settled_amount_label.setText(f"¥{settlement_stats['settled_amount']:.2f}")
+            self.unsettled_amount_label.setText(f"¥{settlement_stats['unsettled_amount']:.2f}")
+            
+            if settlement_stats['total_amount'] > 0:
+                settled_ratio = (settlement_stats['settled_amount'] / settlement_stats['total_amount'] * 100)
+                self.settled_ratio_label.setText(f"{settled_ratio:.1f}%")
+            else:
+                self.settled_ratio_label.setText("0%")
+            
+            # 更新退款统计
+            self.refund_amount_label.setText(f"¥{refund_stats['total_refund']:.2f}")
+            self.refund_count_label.setText(str(refund_stats['refund_count']))
+            self.refund_ratio_label.setText(f"{refund_stats['refund_ratio']:.1f}%")
         
-        if self.show_chinese_amount:
-            self.income_card_chinese.setText(number_to_chinese(summary['total_income']))
-            self.expense_card_chinese.setText(number_to_chinese(summary['total_expense']))
-            self.net_card_chinese.setText(number_to_chinese(abs(summary['net_income'])))
-        else:
-            self.income_card_chinese.setText("")
-            self.expense_card_chinese.setText("")
-            self.net_card_chinese.setText("")
-        
-        # 更新收入结构饼图
-        income_stats = self.db_manager.get_category_statistics(start_date, end_date, "收入", self.category_level)
-        if income_stats and summary['total_income'] > 0:
-            income_labels = [item[0] for item in income_stats]
-            income_data = [item[1] for item in income_stats]
-            # 限制显示前8个类别，其余合并为"其他"
-            if len(income_labels) > 8:
-                other_amount = sum(income_data[8:])
-                income_labels = income_labels[:8] + ["其他"]
-                income_data = income_data[:8] + [other_amount]
-            self.create_pie_chart(self.income_figure, income_data, income_labels, "收入结构")
-        else:
-            self.create_pie_chart(self.income_figure, [], [], "收入结构")
-        
-        # 更新支出结构饼图
-        expense_stats = self.db_manager.get_category_statistics(start_date, end_date, "支出", self.category_level)
-        if expense_stats and summary['total_expense'] > 0:
-            expense_labels = [item[0] for item in expense_stats]
-            expense_data = [item[1] for item in expense_stats]
-            # 限制显示前8个类别，其余合并为"其他"
-            if len(expense_labels) > 8:
-                other_amount = sum(expense_data[8:])
-                expense_labels = expense_labels[:8] + ["其他"]
-                expense_data = expense_data[:8] + [other_amount]
-            self.create_pie_chart(self.expense_figure, expense_data, expense_labels, "支出结构")
-        else:
-            self.create_pie_chart(self.expense_figure, [], [], "支出结构")
-        
-        # 更新账户分布饼图
-        account_stats = self.db_manager.get_account_statistics(start_date, end_date)
-        if account_stats:
-            account_labels = [item[0] for item in account_stats]
-            account_data = [item[1] + item[2] for item in account_stats]  # 收入+支出
-            # 限制显示前6个账户，其余合并为"其他"
-            if len(account_labels) > 6:
-                other_amount = sum(account_data[6:])
-                account_labels = account_labels[:6] + ["其他"]
-                account_data = account_data[:6] + [other_amount]
-            self.create_pie_chart(self.account_figure, account_data, account_labels, "账户分布")
-        else:
-            self.create_pie_chart(self.account_figure, [], [], "账户分布")
-        
-        # 刷新画布
-        self.income_canvas.draw()
-        self.expense_canvas.draw()
-        self.account_canvas.draw()
-        
-        # 更新销账状态统计
-        settlement_stats = self.db_manager.get_settlement_statistics(start_date, end_date)
-        self.settled_amount_label.setText(f"¥{settlement_stats['settled_amount']:.2f}")
-        self.unsettled_amount_label.setText(f"¥{settlement_stats['unsettled_amount']:.2f}")
-        
-        if settlement_stats['total_amount'] > 0:
-            settled_ratio = (settlement_stats['settled_amount'] / settlement_stats['total_amount'] * 100)
-            self.settled_ratio_label.setText(f"{settled_ratio:.1f}%")
-        else:
-            self.settled_ratio_label.setText("0%")
-        
-        # 更新退款统计
-        refund_stats = self.db_manager.get_refund_statistics(start_date, end_date)
-        self.refund_amount_label.setText(f"¥{refund_stats['total_refund']:.2f}")
-        self.refund_count_label.setText(str(refund_stats['refund_count']))
-        self.refund_ratio_label.setText(f"{refund_stats['refund_ratio']:.1f}%")
+        finally:
+            # 重新启用UI更新
+            self.setUpdatesEnabled(True)
+            self.update()
 
 
 class MainWindow(QMainWindow):
@@ -1636,10 +1647,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "警告", "请先选择账本！")
             return
         
-        # 获取所有交易记录
-        all_transactions = self.db_manager.get_transactions(self.current_ledger_id)
-        filtered_transactions = []
-        
+        # 收集搜索条件
         keyword = self.keyword_search_edit.text().strip().lower()
         category = self.category_combo.currentText()
         subcategory = self.subcategory_combo.currentText()
@@ -1652,68 +1660,85 @@ class MainWindow(QMainWindow):
         start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
         end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
         
-        for transaction in all_transactions:
-            (trans_id, ledger_id, transaction_date, trans_type, trans_category, trans_subcategory, 
-             amount, trans_account, description, is_settled, refund_amount, 
-             refund_reason, created_time) = transaction
-            
-            # 关键词搜索
-            if keyword:
-                searchable_text = f"{description or ''} {trans_category} {trans_subcategory} {trans_account or ''} {refund_reason or ''}".lower()
-                if keyword not in searchable_text:
-                    continue
-            
-            # 类别搜索
-            if category and trans_category != category:
-                continue
-            
-            if subcategory and trans_subcategory != subcategory:
-                continue
-            
-            # 账户搜索
-            if account and trans_account != account:
-                continue
-            
-            # 收支类型搜索
-            if transaction_type and trans_type != transaction_type:
-                continue
-            
-            # 销账状态搜索
-            if settled_status:
-                if settled_status == "已销账" and not is_settled:
-                    continue
-                elif settled_status == "未销账" and is_settled:
-                    continue
-            
-            # 退款状态搜索
-            if refund_status:
-                if refund_status == "有退款" and refund_amount <= 0:
-                    continue
-                elif refund_status == "无退款" and refund_amount > 0:
-                    continue
-            
-            # 金额范围搜索
-            abs_amount = abs(amount)
-            if min_amount > 0 and abs_amount < min_amount:
-                continue
-            if max_amount < 999999.99 and abs_amount > max_amount:
-                continue
-            
-            # 时间范围搜索
-            if transaction_date < start_date or transaction_date > end_date:
-                continue
-            
-            # 通过所有筛选条件
-            filtered_transactions.append(transaction)
+        # 检查是否有任何搜索条件
+        has_search_conditions = any([
+            keyword, category, subcategory, account, transaction_type,
+            settled_status, refund_status, min_amount > 0, max_amount < 999999.99
+        ])
+        
+        if not has_search_conditions:
+            self.load_transactions()
+            return
+        
+        # 构建SQL查询以提高性能
+        conditions = []
+        params = []
+        
+        conditions.append("ledger_id = ?")
+        params.append(self.current_ledger_id)
+        
+        if keyword:
+            conditions.append("(LOWER(description) LIKE ? OR LOWER(category) LIKE ? OR LOWER(subcategory) LIKE ? OR LOWER(account) LIKE ? OR LOWER(refund_reason) LIKE ?)")
+            keyword_param = f"%{keyword}%"
+            params.extend([keyword_param, keyword_param, keyword_param, keyword_param, keyword_param])
+        
+        if category:
+            conditions.append("category = ?")
+            params.append(category)
+        
+        if subcategory:
+            conditions.append("subcategory = ?")
+            params.append(subcategory)
+        
+        if account:
+            conditions.append("account = ?")
+            params.append(account)
+        
+        if transaction_type:
+            conditions.append("transaction_type = ?")
+            params.append(transaction_type)
+        
+        if settled_status:
+            is_settled = settled_status == "已销账"
+            conditions.append("is_settled = ?")
+            params.append(is_settled)
+        
+        if refund_status:
+            if refund_status == "有退款":
+                conditions.append("refund_amount > 0")
+            else:
+                conditions.append("refund_amount = 0")
+        
+        if min_amount > 0:
+            conditions.append("ABS(amount) >= ?")
+            params.append(min_amount)
+        
+        if max_amount < 999999.99:
+            conditions.append("ABS(amount) <= ?")
+            params.append(max_amount)
+        
+        # 时间范围
+        conditions.append("transaction_date BETWEEN ? AND ?")
+        params.extend([start_date, end_date])
+        
+        # 执行查询
+        with self.db_manager.get_connection() as conn:
+            cursor = conn.cursor()
+            query = f"""
+                SELECT * FROM transactions 
+                WHERE {' AND '.join(conditions)}
+                ORDER BY transaction_date DESC, created_time DESC
+            """
+            cursor.execute(query, params)
+            filtered_transactions = cursor.fetchall()
         
         # 显示筛选结果
         self.load_transactions(filtered_transactions)
         
         # 显示搜索结果数量
         result_count = len(filtered_transactions)
-        total_count = len(all_transactions)
-        if keyword or category or subcategory or account or transaction_type or settled_status or refund_status or min_amount > 0 or max_amount < 999999.99:
-            QMessageBox.information(self, "搜索结果", f"找到 {result_count} 条记录，共 {total_count} 条记录")
+        total_count = len(self.db_manager.get_transactions(self.current_ledger_id))
+        QMessageBox.information(self, "搜索结果", f"找到 {result_count} 条记录，共 {total_count} 条记录")
     
     def toggle_advanced_search(self):
         """切换高级搜索的显示/隐藏"""
