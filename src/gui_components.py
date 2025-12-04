@@ -817,13 +817,14 @@ class ThemeSelectionDialog(QDialog):
         radio.setStyleSheet(f"""
             QRadioButton {{
                 color: {theme_data['colors']['primary_text']};
+                background-color: transparent;
             }}
             QRadioButton::indicator {{
                 width: 16px;
                 height: 16px;
                 border: 2px solid {theme_data['colors']['border']};
                 border-radius: 8px;
-                background-color: {theme_data['colors']['card_background']};
+                background-color: transparent;
             }}
             QRadioButton::indicator:checked {{
                 background-color: {theme_data['colors']['accent']};
