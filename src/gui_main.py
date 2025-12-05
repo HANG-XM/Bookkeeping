@@ -1113,9 +1113,6 @@ class MainWindow(QMainWindow):
                 self.current_ledger_id = last_ledger_id
                 self.initialize_search_controls()
                 self.load_transactions()
-                
-                # 显示提示信息
-                MessageHelper.show_info(self, "提示", f"已自动打开上次账本: {ledger_info['name']}")
     
     def save_current_ledger(self):
         """保存当前账本信息"""
