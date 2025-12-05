@@ -17,14 +17,18 @@ import matplotlib
 from theme_manager import theme_manager, number_to_chinese
 from database_manager import DatabaseManager
 from gui_components import (SystemSettingsDialog, ThemeSelectionDialog, CategoryButton, 
-                           AddLedgerDialog, EditIncomeDialog, AddIncomeDialog)
-from gui_components import EditExpenseDialog, AddExpenseDialog
+                           AddLedgerDialog)
+from dialogs import EditIncomeDialog, AddIncomeDialog, EditExpenseDialog, AddExpenseDialog
+from ui_base_components import StyleHelper, MessageHelper, BaseAccountDialog
+from chart_utils import ChartUtils
 
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
 matplotlib.rcParams['axes.unicode_minus'] = False
 
 
-class EditAccountDialog(QDialog):
+class EditAccountDialog(BaseAccountDialog):
+    """编辑账户对话框"""
+    
     def __init__(self, account_data, parent=None):
         super().__init__(parent)
         self.account_data = account_data
@@ -34,53 +38,11 @@ class EditAccountDialog(QDialog):
         self.load_account_data()
     
     def setup_ui(self):
-        layout = QVBoxLayout()
-        form_layout = QFormLayout()
-        
-        self.name_edit = QLineEdit()
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["现金", "银行卡", "电子支付", "其他"])
-        self.bank_edit = QLineEdit()
-        self.balance_spin = QDoubleSpinBox()
-        self.balance_spin.setRange(0, 999999.99)
-        self.balance_spin.setDecimals(2)
-        self.balance_spin.setPrefix("¥")
-        self.description_edit = QTextEdit()
-        self.description_edit.setMaximumHeight(80)
-        
-        account_name_label = QLabel("账户名称:")
-        account_name_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(account_name_label, self.name_edit)
-        
-        account_type_label = QLabel("账户类型:")
-        account_type_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(account_type_label, self.type_combo)
-        
-        bank_label = QLabel("开户行:")
-        bank_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(bank_label, self.bank_edit)
-        
-        balance_label = QLabel("初始余额:")
-        balance_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(balance_label, self.balance_spin)
-        
-        note_label = QLabel("备注:")
-        note_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(note_label, self.description_edit)
-        
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("确定")
-        cancel_button = QPushButton("取消")
-        ok_button.clicked.connect(self.accept)
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(ok_button)
-        button_layout.addWidget(cancel_button)
-        
-        layout.addLayout(form_layout)
-        layout.addLayout(button_layout)
+        layout = self.setup_account_form()
         self.setLayout(layout)
     
     def load_account_data(self):
+        """加载账户数据"""
         if self.account_data:
             (account_id, name, account_type, balance, bank, description) = self.account_data
             self.name_edit.setText(name)
@@ -90,17 +52,14 @@ class EditAccountDialog(QDialog):
             self.description_edit.setPlainText(description or "")
     
     def get_data(self):
-        return {
-            'id': self.account_data[0] if self.account_data else None,
-            'name': self.name_edit.text(),
-            'type': self.type_combo.currentText(),
-            'bank': self.bank_edit.text(),
-            'balance': self.balance_spin.value(),
-            'description': self.description_edit.toPlainText()
-        }
+        data = super().get_account_data()
+        data['id'] = self.account_data[0] if self.account_data else None
+        return data
 
 
-class AddAccountDialog(QDialog):
+class AddAccountDialog(BaseAccountDialog):
+    """添加账户对话框"""
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("添加账户")
@@ -108,60 +67,8 @@ class AddAccountDialog(QDialog):
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QVBoxLayout()
-        form_layout = QFormLayout()
-        
-        self.name_edit = QLineEdit()
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["现金", "银行卡", "电子支付", "其他"])
-        self.bank_edit = QLineEdit()
-        self.balance_spin = QDoubleSpinBox()
-        self.balance_spin.setRange(0, 999999.99)
-        self.balance_spin.setDecimals(2)
-        self.balance_spin.setPrefix("¥")
-        self.description_edit = QTextEdit()
-        self.description_edit.setMaximumHeight(80)
-        
-        account_name_label = QLabel("账户名称:")
-        account_name_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(account_name_label, self.name_edit)
-        
-        account_type_label = QLabel("账户类型:")
-        account_type_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(account_type_label, self.type_combo)
-        
-        bank_label = QLabel("开户行:")
-        bank_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(bank_label, self.bank_edit)
-        
-        balance_label = QLabel("初始余额:")
-        balance_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(balance_label, self.balance_spin)
-        
-        note_label = QLabel("备注:")
-        note_label.setStyleSheet("background-color: transparent;")
-        form_layout.addRow(note_label, self.description_edit)
-        
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("确定")
-        cancel_button = QPushButton("取消")
-        ok_button.clicked.connect(self.accept)
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(ok_button)
-        button_layout.addWidget(cancel_button)
-        
-        layout.addLayout(form_layout)
-        layout.addLayout(button_layout)
+        layout = self.setup_account_form()
         self.setLayout(layout)
-    
-    def get_data(self):
-        return {
-            'name': self.name_edit.text(),
-            'type': self.type_combo.currentText(),
-            'bank': self.bank_edit.text(),
-            'balance': self.balance_spin.value(),
-            'description': self.description_edit.toPlainText()
-        }
 
 
 class TransferDialog(QDialog):
@@ -198,23 +105,23 @@ class TransferDialog(QDialog):
         self.description_edit = QLineEdit()
         
         transfer_date_label = QLabel("转账日期:")
-        transfer_date_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(transfer_date_label)
         form_layout.addRow(transfer_date_label, self.date_edit)
         
         from_account_label = QLabel("转出账户:")
-        from_account_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(from_account_label)
         form_layout.addRow(from_account_label, self.from_account_combo)
         
         to_account_label = QLabel("转入账户:")
-        to_account_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(to_account_label)
         form_layout.addRow(to_account_label, self.to_account_combo)
         
         transfer_amount_label = QLabel("转账金额:")
-        transfer_amount_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(transfer_amount_label)
         form_layout.addRow(transfer_amount_label, self.amount_spin)
         
         transfer_note_label = QLabel("备注:")
-        transfer_note_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(transfer_note_label)
         form_layout.addRow(transfer_note_label, self.description_edit)
         
         button_layout = QHBoxLayout()
@@ -353,12 +260,12 @@ class AssetManagementWidget(QWidget):
                 parent = self.parent()
                 if parent and hasattr(parent, 'statistics_widget'):
                     parent.statistics_widget.update_statistics()
-                QMessageBox.information(self, "成功", "账户添加成功！")
+                MessageHelper.show_info(self, "成功", "账户添加成功！")
     
     def edit_account(self):
         current_row = self.account_table.currentRow()
         if current_row < 0:
-            QMessageBox.warning(self, "警告", "请先选择要编辑的账户！")
+            MessageHelper.show_warning(self, "警告", "请先选择要编辑的账户！")
             return
         
         # 获取选中的账户数据
@@ -371,7 +278,7 @@ class AssetManagementWidget(QWidget):
                 break
         
         if not account_data:
-            QMessageBox.warning(self, "警告", "找不到选中的账户数据！")
+            MessageHelper.show_warning(self, "警告", "找不到选中的账户数据！")
             return
         
         dialog = EditAccountDialog(account_data, self)
@@ -387,12 +294,12 @@ class AssetManagementWidget(QWidget):
                 parent = self.parent()
                 if parent and hasattr(parent, 'statistics_widget'):
                     parent.statistics_widget.update_statistics()
-                QMessageBox.information(self, "成功", "账户修改成功！")
+                MessageHelper.show_info(self, "成功", "账户修改成功！")
     
     def delete_account(self):
         current_row = self.account_table.currentRow()
         if current_row < 0:
-            QMessageBox.warning(self, "警告", "请先选择要删除的账户！")
+            MessageHelper.show_warning(self, "警告", "请先选择要删除的账户！")
             return
         
         account_name = self.account_table.item(current_row, 0).text()
@@ -404,21 +311,18 @@ class AssetManagementWidget(QWidget):
                 break
         
         if not account_data:
-            QMessageBox.warning(self, "警告", "找不到选中的账户数据！")
+            MessageHelper.show_warning(self, "警告", "找不到选中的账户数据！")
             return
         
-        reply = QMessageBox.question(self, "确认删除", 
-                                   f"确定要删除账户 '{account_name}' 吗？删除后将无法恢复！",
-                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        
-        if reply == QMessageBox.StandardButton.Yes:
+        if not MessageHelper.ask_confirmation(self, "确认删除", 
+                                   f"确定要删除账户 '{account_name}' 吗？删除后将无法恢复！"):
             self.db_manager.delete_account(account_data[0])
             self.load_accounts()
             # 刷新统计页面
             parent = self.parent()
             if parent and hasattr(parent, 'statistics_widget'):
                 parent.statistics_widget.update_statistics()
-            QMessageBox.information(self, "成功", "账户删除成功！")
+            MessageHelper.show_info(self, "成功", "账户删除成功！")
     
     def add_transfer(self):
         dialog = TransferDialog(self.db_manager, self)
@@ -426,13 +330,13 @@ class AssetManagementWidget(QWidget):
             data = dialog.get_data()
             if data['from_account'] and data['to_account'] and data['amount'] > 0:
                 if data['from_account'] == data['to_account']:
-                    QMessageBox.warning(self, "警告", "转出账户和转入账户不能相同！")
+                    MessageHelper.show_warning(self, "警告", "转出账户和转入账户不能相同！")
                     return
                 
                 # 检查转出账户余额
                 from_balance = self.db_manager.get_account_balance(data['from_account'])
                 if from_balance < data['amount']:
-                    QMessageBox.warning(self, "警告", f"转出账户余额不足！当前余额: ¥{from_balance:.2f}")
+                    MessageHelper.show_warning(self, "警告", f"转出账户余额不足！当前余额: ¥{from_balance:.2f}")
                     return
                 
                 self.db_manager.add_transfer(
@@ -445,7 +349,7 @@ class AssetManagementWidget(QWidget):
                 parent = self.parent()
                 if parent and hasattr(parent, 'statistics_widget'):
                     parent.statistics_widget.update_statistics()
-                QMessageBox.information(self, "成功", "转账记录添加成功！")
+                MessageHelper.show_info(self, "成功", "转账记录添加成功！")
 
 
 class StatisticsWidget(QWidget):
@@ -507,11 +411,11 @@ class StatisticsWidget(QWidget):
         self.custom_date_widget = QWidget()
         custom_date_layout = QHBoxLayout()
         start_date_label = QLabel("起始日期:")
-        start_date_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(start_date_label)
         custom_date_layout.addWidget(start_date_label)
         custom_date_layout.addWidget(self.start_date_edit)
         end_date_label = QLabel("结束日期:")
-        end_date_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(end_date_label)
         custom_date_layout.addWidget(end_date_label)
         custom_date_layout.addWidget(self.end_date_edit)
         custom_date_layout.addLayout(quick_layout)
@@ -519,7 +423,7 @@ class StatisticsWidget(QWidget):
         self.custom_date_widget.hide()
         
         view_type_label = QLabel("视图类型:")
-        view_type_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(view_type_label)
         view_control_layout.addWidget(view_type_label)
         view_control_layout.addWidget(self.view_combo)
         view_control_layout.addWidget(self.prev_btn)
@@ -539,7 +443,7 @@ class StatisticsWidget(QWidget):
         options_layout = QHBoxLayout()
         
         self.show_chinese_check = QCheckBox("显示金额大写")
-        self.show_chinese_check.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_checkbox_style(self.show_chinese_check)
         self.show_chinese_check.toggled.connect(self.toggle_chinese_amount)
         
         self.category_level_combo = QComboBox()
@@ -548,7 +452,7 @@ class StatisticsWidget(QWidget):
         
         options_layout.addWidget(self.show_chinese_check)
         category_stats_label = QLabel("类别统计:")
-        category_stats_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(category_stats_label)
         options_layout.addWidget(category_stats_label)
         options_layout.addWidget(self.category_level_combo)
         options_layout.addStretch()
@@ -640,22 +544,22 @@ class StatisticsWidget(QWidget):
         settlement_group = QGroupBox("销账状态分布")
         settlement_form_layout = QFormLayout()
         self.settled_amount_label = QLabel("¥0.00")
-        self.settled_amount_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(self.settled_amount_label)
         self.unsettled_amount_label = QLabel("¥0.00")
-        self.unsettled_amount_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(self.unsettled_amount_label)
         self.settled_ratio_label = QLabel("0%")
-        self.settled_ratio_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(self.settled_ratio_label)
         
         settled_amount_label = QLabel("已销账金额:")
-        settled_amount_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(settled_amount_label)
         settlement_form_layout.addRow(settled_amount_label, self.settled_amount_label)
         
         unsettled_amount_label = QLabel("未销账金额:")
-        unsettled_amount_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(unsettled_amount_label)
         settlement_form_layout.addRow(unsettled_amount_label, self.unsettled_amount_label)
         
         settled_ratio_label = QLabel("销账比例:")
-        settled_ratio_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(settled_ratio_label)
         settlement_form_layout.addRow(settled_ratio_label, self.settled_ratio_label)
         
         settlement_group.setLayout(settlement_form_layout)
@@ -664,22 +568,22 @@ class StatisticsWidget(QWidget):
         refund_group = QGroupBox("退款统计")
         refund_form_layout = QFormLayout()
         self.refund_amount_label = QLabel("¥0.00")
-        self.refund_amount_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(self.refund_amount_label)
         self.refund_count_label = QLabel("0")
-        self.refund_count_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(self.refund_count_label)
         self.refund_ratio_label = QLabel("0%")
-        self.refund_ratio_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(self.refund_ratio_label)
         
         refund_total_label = QLabel("退款总额:")
-        refund_total_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(refund_total_label)
         refund_form_layout.addRow(refund_total_label, self.refund_amount_label)
         
         refund_count_text_label = QLabel("退款笔数:")
-        refund_count_text_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(refund_count_text_label)
         refund_form_layout.addRow(refund_count_text_label, self.refund_count_label)
         
         refund_ratio_text_label = QLabel("退款占比:")
-        refund_ratio_text_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(refund_ratio_text_label)
         refund_form_layout.addRow(refund_ratio_text_label, self.refund_ratio_label)
         
         refund_group.setLayout(refund_form_layout)
@@ -842,14 +746,14 @@ class StatisticsWidget(QWidget):
         
         # 标题
         title_label = QLabel(title)
-        title_label.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold; background-color: transparent;")
+        StyleHelper.apply_card_title_style(title_label, color)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
         
         # 金额
         amount_label = QLabel("¥0.00")
         amount_label.setObjectName("card_amount")
-        amount_label.setStyleSheet(f"color: {color}; font-size: 24px; font-weight: bold; background-color: transparent;")
+        StyleHelper.apply_card_amount_style(amount_label, color)
         amount_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         amount_label.setWordWrap(True)
         amount_label.setMinimumHeight(35)
@@ -858,7 +762,7 @@ class StatisticsWidget(QWidget):
         # 中文大写
         chinese_label = QLabel("")
         chinese_label.setObjectName("card_chinese")
-        chinese_label.setStyleSheet(f"color: {color}; font-size: 12px; background-color: transparent;")
+        StyleHelper.apply_card_chinese_style(chinese_label, color)
         chinese_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         chinese_label.setWordWrap(True)
         chinese_label.setMinimumHeight(20)
@@ -869,65 +773,7 @@ class StatisticsWidget(QWidget):
     
     def create_pie_chart(self, figure, data, labels, title, colors=None):
         """创建圆环图"""
-        try:
-            # 清理之前的图形对象以释放内存
-            figure.clear()
-            ax = figure.add_subplot(111)
-            
-            # 获取主题颜色
-            theme_colors = theme_manager.get_color('chart_colors')
-            theme_bg = theme_manager.get_color('background')
-            theme_text = theme_manager.get_color('primary_text')
-            theme_border = theme_manager.get_color('border')
-            
-            if not data or sum(data) == 0:
-                ax.text(0.5, 0.5, '暂无数据', ha='center', va='center', transform=ax.transAxes, 
-                       fontsize=12, color=theme_text)
-                ax.set_title(title, fontsize=14, fontweight='bold', color=theme_text)
-                return
-            
-            # 设置颜色
-            if colors is None:
-                # 使用主题图表颜色
-                import matplotlib.colors as mcolors
-                colors = []
-                for i in range(len(data)):
-                    if i < len(theme_colors):
-                        # 解析十六进制颜色
-                        hex_color = theme_colors[i].lstrip('#')
-                        rgb = tuple(int(hex_color[i:i+2], 16)/255.0 for i in (0, 2, 4))
-                        colors.append(rgb)
-                    else:
-                        colors.append(plt.cm.Set3(i))
-            
-            # 创建圆环图（通过设置wedgeprops来实现）
-            wedges, texts, autotexts = ax.pie(data, labels=labels, colors=colors, autopct='%1.1f%%', 
-                                             startangle=90, textprops={'fontsize': 9, 'color': theme_text},
-                                             wedgeprops=dict(width=0.6, edgecolor=theme_bg, linewidth=2))
-            
-            # 在中心添加圆圈形成圆环效果
-            centre_circle = plt.Circle((0, 0), 0.40, fc=theme_bg, linewidth=2, edgecolor=theme_border)
-            ax.add_artist(centre_circle)
-            
-            # 设置标题
-            ax.set_title(title, fontsize=14, fontweight='bold', pad=20, color=theme_text)
-            
-            # 确保圆环图是圆形
-            ax.axis('equal')
-            
-            # 设置背景色
-            figure.patch.set_facecolor(theme_bg)
-            ax.set_facecolor(theme_bg)
-            
-            figure.tight_layout()
-        except Exception as e:
-            # 如果绘图出错，创建一个简单的错误显示
-            figure.clear()
-            ax = figure.add_subplot(111)
-            ax.text(0.5, 0.5, f'图表加载错误\n{str(e)}', ha='center', va='center', 
-                   transform=ax.transAxes, fontsize=12, color='red')
-            ax.set_title(title, fontsize=14, fontweight='bold')
-            ax.axis('off')
+        ChartUtils.create_pie_chart(figure, data, labels, title, colors)
     
     def update_statistics(self):
         """更新统计数据"""
@@ -965,11 +811,8 @@ class StatisticsWidget(QWidget):
             if income_stats and summary['total_income'] > 0:
                 income_labels = [item[0] for item in income_stats]
                 income_data = [item[1] for item in income_stats]
-                # 限制显示前8个类别，其余合并为"其他"
-                if len(income_labels) > 8:
-                    other_amount = sum(income_data[8:])
-                    income_labels = income_labels[:8] + ["其他"]
-                    income_data = income_data[:8] + [other_amount]
+                # 使用工具方法限制显示数量
+                income_labels, income_data = ChartUtils.limit_data_display(income_labels, income_data, 8)
                 self.create_pie_chart(self.income_figure, income_data, income_labels, "收入结构")
             else:
                 self.create_pie_chart(self.income_figure, [], [], "收入结构")
@@ -978,11 +821,8 @@ class StatisticsWidget(QWidget):
             if expense_stats and summary['total_expense'] > 0:
                 expense_labels = [item[0] for item in expense_stats]
                 expense_data = [item[1] for item in expense_stats]
-                # 限制显示前8个类别，其余合并为"其他"
-                if len(expense_labels) > 8:
-                    other_amount = sum(expense_data[8:])
-                    expense_labels = expense_labels[:8] + ["其他"]
-                    expense_data = expense_data[:8] + [other_amount]
+                # 使用工具方法限制显示数量
+                expense_labels, expense_data = ChartUtils.limit_data_display(expense_labels, expense_data, 8)
                 self.create_pie_chart(self.expense_figure, expense_data, expense_labels, "支出结构")
             else:
                 self.create_pie_chart(self.expense_figure, [], [], "支出结构")
@@ -991,19 +831,16 @@ class StatisticsWidget(QWidget):
             if account_stats:
                 account_labels = [item[0] for item in account_stats]
                 account_data = [item[1] + item[2] for item in account_stats]  # 收入+支出
-                # 限制显示前6个账户，其余合并为"其他"
-                if len(account_labels) > 6:
-                    other_amount = sum(account_data[6:])
-                    account_labels = account_labels[:6] + ["其他"]
-                    account_data = account_data[:6] + [other_amount]
+                # 使用工具方法限制显示数量
+                account_labels, account_data = ChartUtils.limit_data_display(account_labels, account_data, 6)
                 self.create_pie_chart(self.account_figure, account_data, account_labels, "账户分布")
             else:
                 self.create_pie_chart(self.account_figure, [], [], "账户分布")
             
-            # 批量刷新画布
-            self.income_canvas.draw()
-            self.expense_canvas.draw()
-            self.account_canvas.draw()
+            # 使用工具方法安全刷新画布
+            ChartUtils.safe_draw_canvas(self.income_canvas)
+            ChartUtils.safe_draw_canvas(self.expense_canvas)
+            ChartUtils.safe_draw_canvas(self.account_canvas)
             
             # 更新销账状态统计
             self.settled_amount_label.setText(f"¥{settlement_stats['settled_amount']:.2f}")
@@ -1057,102 +894,19 @@ class MainWindow(QMainWindow):
     
     def update_button_theme(self, button):
         """更新按钮主题"""
-        colors = theme_manager.get_current_theme()["colors"]
         text = button.text()
-        
-        # 根据按钮文本设置不同颜色
         if "收入" in text:
-            button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {colors['income']};
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                    font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {colors['hover']};
-                    border: 1px solid {colors['income']};
-                }}
-            """)
+            StyleHelper.apply_button_style(button, "income")
         elif "支出" in text:
-            button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {colors['expense']};
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                    font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {colors['hover']};
-                    border: 1px solid {colors['expense']};
-                }}
-            """)
+            StyleHelper.apply_button_style(button, "expense")
         elif "删除" in text:
-            button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {colors['danger']};
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                    font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {colors['hover']};
-                    border: 1px solid {colors['danger']};
-                }}
-            """)
+            StyleHelper.apply_button_style(button, "danger")
         else:
-            # 默认按钮样式
-            button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {colors['accent']};
-                    color: white;
-                    border: none;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                    font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background-color: {colors['hover']};
-                    border: 1px solid {colors['accent']};
-                }}
-            """)
+            StyleHelper.apply_button_style(button, "default")
     
     def update_table_theme(self, table):
         """更新表格主题"""
-        colors = theme_manager.get_current_theme()["colors"]
-        table.setStyleSheet(f"""
-            QTableWidget {{
-                background-color: {colors['card_background']};
-                alternate-background-color: {colors['secondary_background']};
-                gridline-color: {colors['border']};
-                selection-background-color: {colors['accent']};
-            }}
-            QTableWidget::item {{
-                padding: 5px;
-                color: {colors['primary_text']};
-            }}
-            QTableWidget::item:selected {{
-                background-color: {colors['accent']};
-                color: white;
-            }}
-            QHeaderView::section {{
-                background-color: {colors['secondary_background']};
-                color: {colors['primary_text']};
-                padding: 5px;
-                border: 1px solid {colors['border']};
-                font-weight: bold;
-            }}
-        """)
+        StyleHelper.apply_table_style(table)
     
     def showEvent(self, event):
         """窗口显示时应用主题"""
@@ -1219,7 +973,7 @@ class MainWindow(QMainWindow):
         dialog = ThemeSelectionDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.apply_theme()
-            QMessageBox.information(self, "成功", "主题已成功应用！")
+            MessageHelper.show_info(self, "成功", "主题已成功应用！")
     
     def create_ledger_panel(self):
         widget = QWidget()
@@ -1346,7 +1100,7 @@ class MainWindow(QMainWindow):
         # 基础搜索
         basic_search_layout = QHBoxLayout()
         keyword_label = QLabel("关键词搜索:")
-        keyword_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(keyword_label)
         basic_search_layout.addWidget(keyword_label)
         
         self.keyword_search_edit = QLineEdit()
@@ -1425,7 +1179,7 @@ class MainWindow(QMainWindow):
         
         # 账户筛选
         account_label = QLabel("账户:")
-        account_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(account_label)
         basic_filter_layout.addWidget(account_label)
         self.account_search_combo = QComboBox()
         self.account_search_combo.setMinimumWidth(120)  # 设置组合框最小宽度
@@ -1434,7 +1188,7 @@ class MainWindow(QMainWindow):
         
         # 交易类型
         type_label = QLabel("类型:")
-        type_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(type_label)
         basic_filter_layout.addWidget(type_label)
         self.transaction_type_combo = QComboBox()
         self.transaction_type_combo.setMinimumWidth(80)  # 设置组合框最小宽度
@@ -1443,7 +1197,7 @@ class MainWindow(QMainWindow):
         
         # 分类筛选
         category_label = QLabel("分类:")
-        category_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(category_label)
         basic_filter_layout.addWidget(category_label)
         self.category_combo = QComboBox()
         self.category_combo.setMinimumWidth(100)  # 设置组合框最小宽度
@@ -1464,7 +1218,7 @@ class MainWindow(QMainWindow):
         status_group.setMinimumWidth(200)  # 设置分组框最小宽度
         status_layout = QHBoxLayout()
         settled_label = QLabel("销账:")
-        settled_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(settled_label)
         status_layout.addWidget(settled_label)
         self.settled_combo = QComboBox()
         self.settled_combo.setMinimumWidth(80)  # 设置组合框最小宽度
@@ -1472,7 +1226,7 @@ class MainWindow(QMainWindow):
         status_layout.addWidget(self.settled_combo)
         
         refund_label = QLabel("退款:")
-        refund_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(refund_label)
         status_layout.addWidget(refund_label)
         self.refund_combo = QComboBox()
         self.refund_combo.setMinimumWidth(80)  # 设置组合框最小宽度
@@ -1501,7 +1255,7 @@ class MainWindow(QMainWindow):
         amount_layout.addWidget(self.min_amount_spin)
         
         amount_to_label = QLabel("至")
-        amount_to_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(amount_to_label)
         amount_layout.addWidget(amount_to_label)
         self.max_amount_spin = QDoubleSpinBox()
         self.max_amount_spin.setRange(0, 999999.99)
@@ -1525,7 +1279,7 @@ class MainWindow(QMainWindow):
         date_layout.addWidget(self.start_date_edit)
         
         to_label = QLabel("至")
-        to_label.setStyleSheet("background-color: transparent;")
+        StyleHelper.apply_label_style(to_label)
         date_layout.addWidget(to_label)
         self.end_date_edit = QDateEdit()
         self.end_date_edit.setCalendarPopup(True)
@@ -1654,7 +1408,7 @@ class MainWindow(QMainWindow):
     def search_transactions(self):
         """执行搜索"""
         if not self.current_ledger_id:
-            QMessageBox.warning(self, "警告", "请先选择账本！")
+            MessageHelper.show_warning(self, "警告", "请先选择账本！")
             return
         
         # 收集搜索条件
@@ -1748,7 +1502,7 @@ class MainWindow(QMainWindow):
         # 显示搜索结果数量
         result_count = len(filtered_transactions)
         total_count = len(self.db_manager.get_transactions(self.current_ledger_id))
-        QMessageBox.information(self, "搜索结果", f"找到 {result_count} 条记录，共 {total_count} 条记录")
+        MessageHelper.show_info(self, "搜索结果", f"找到 {result_count} 条记录，共 {total_count} 条记录")
     
     def toggle_advanced_search(self):
         """切换高级搜索的显示/隐藏"""
@@ -1813,33 +1567,30 @@ class MainWindow(QMainWindow):
             if data['name']:
                 self.db_manager.add_ledger(data['name'], data['type'], data['description'])
                 self.load_ledgers()
-                QMessageBox.information(self, "成功", "账本添加成功！")
+                MessageHelper.show_info(self, "成功", "账本添加成功！")
     
     def delete_ledger(self):
         current_item = self.ledger_list.currentItem()
         if not current_item:
-            QMessageBox.warning(self, "警告", "请先选择要删除的账本！")
+            MessageHelper.show_warning(self, "警告", "请先选择要删除的账本！")
             return
         
         ledger_id = current_item.data(0, Qt.ItemDataRole.UserRole)
         ledger_name = self.ledgers[ledger_id]['name']
         
-        reply = QMessageBox.question(self, "确认删除", 
-                                   f"确定要删除账本 '{ledger_name}' 吗？\n删除后将同时删除该账本下的所有交易记录！",
-                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        
-        if reply == QMessageBox.StandardButton.Yes:
+        if not MessageHelper.ask_confirmation(self, "确认删除", 
+                                   f"确定要删除账本 '{ledger_name}' 吗？\n删除后将同时删除该账本下的所有交易记录！"):
             self.db_manager.delete_ledger(ledger_id)
             self.load_ledgers()
             if self.current_ledger_id == ledger_id:
                 self.current_ledger_id = None
                 self.current_ledger_label.setText("请选择账本")
                 self.transaction_table.setRowCount(0)
-            QMessageBox.information(self, "成功", "账本删除成功！")
+            MessageHelper.show_info(self, "成功", "账本删除成功！")
     
     def add_income(self):
         if not self.current_ledger_id:
-            QMessageBox.warning(self, "警告", "请先选择账本！")
+            MessageHelper.show_warning(self, "警告", "请先选择账本！")
             return
         
         while True:
@@ -1862,20 +1613,20 @@ class MainWindow(QMainWindow):
                         # 继续添加下一条记录
                         continue
                     else:
-                        QMessageBox.information(self, "成功", "收入记录添加成功！")
+                        MessageHelper.show_info(self, "成功", "收入记录添加成功！")
                         # 刷新资产管理页面的账户信息
                         if hasattr(self, 'asset_widget'):
                             self.asset_widget.load_accounts()
                         break
                 else:
-                    QMessageBox.warning(self, "警告", "请填写必要的收入信息！")
+                    MessageHelper.show_warning(self, "警告", "请填写必要的收入信息！")
                     break
             else:
                 break
     
     def add_expense(self):
         if not self.current_ledger_id:
-            QMessageBox.warning(self, "警告", "请先选择账本！")
+            MessageHelper.show_warning(self, "警告", "请先选择账本！")
             return
         
         while True:
@@ -1898,31 +1649,31 @@ class MainWindow(QMainWindow):
                         # 继续添加下一条记录
                         continue
                     else:
-                        QMessageBox.information(self, "成功", "支出记录添加成功！")
+                        MessageHelper.show_info(self, "成功", "支出记录添加成功！")
                         # 刷新资产管理页面的账户信息
                         if hasattr(self, 'asset_widget'):
                             self.asset_widget.load_accounts()
                         break
                 else:
-                    QMessageBox.warning(self, "警告", "请填写必要的支出信息！")
+                    MessageHelper.show_warning(self, "警告", "请填写必要的支出信息！")
                     break
             else:
                 break
     
     def edit_transaction(self):
         if not self.current_ledger_id:
-            QMessageBox.warning(self, "警告", "请先选择账本！")
+            MessageHelper.show_warning(self, "警告", "请先选择账本！")
             return
         
         current_row = self.transaction_table.currentRow()
         if current_row < 0:
-            QMessageBox.warning(self, "警告", "请先选择要编辑的交易记录！")
+            MessageHelper.show_warning(self, "警告", "请先选择要编辑的交易记录！")
             return
         
         # 获取选中的交易记录数据
         transactions = self.db_manager.get_transactions(self.current_ledger_id)
         if current_row >= len(transactions):
-            QMessageBox.warning(self, "警告", "找不到选中的交易记录！")
+            MessageHelper.show_warning(self, "警告", "找不到选中的交易记录！")
             return
         
         transaction_data = transactions[current_row]
@@ -1933,7 +1684,7 @@ class MainWindow(QMainWindow):
         elif transaction_type == "支出":
             dialog = EditExpenseDialog(self.db_manager, transaction_data, self)
         else:
-            QMessageBox.warning(self, "警告", "未知的交易类型！")
+            MessageHelper.show_warning(self, "警告", "未知的交易类型！")
             return
         
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -1955,7 +1706,7 @@ class MainWindow(QMainWindow):
                 if data['account']:
                     self.db_manager.update_account_balance(data['account'], balance_change)
                 
-                QMessageBox.information(self, "成功", "交易记录修改成功！")
+                MessageHelper.show_info(self, "成功", "交易记录修改成功！")
                 # 刷新相关页面
                 if hasattr(self, 'asset_widget'):
                     self.asset_widget.load_accounts()
@@ -1964,18 +1715,18 @@ class MainWindow(QMainWindow):
     
     def delete_transaction(self):
         if not self.current_ledger_id:
-            QMessageBox.warning(self, "警告", "请先选择账本！")
+            MessageHelper.show_warning(self, "警告", "请先选择账本！")
             return
         
         current_row = self.transaction_table.currentRow()
         if current_row < 0:
-            QMessageBox.warning(self, "警告", "请先选择要删除的交易记录！")
+            MessageHelper.show_warning(self, "警告", "请先选择要删除的交易记录！")
             return
         
         # 获取选中的交易记录数据
         transactions = self.db_manager.get_transactions(self.current_ledger_id)
         if current_row >= len(transactions):
-            QMessageBox.warning(self, "警告", "找不到选中的交易记录！")
+            MessageHelper.show_warning(self, "警告", "找不到选中的交易记录！")
             return
         
         transaction_data = transactions[current_row]
@@ -1986,16 +1737,13 @@ class MainWindow(QMainWindow):
         amount = transaction_data[6]
         account = transaction_data[7]
         
-        reply = QMessageBox.question(self, "确认删除", 
+        if not MessageHelper.ask_confirmation(self, "确认删除", 
                                    f"确定要删除这条交易记录吗？\n"
                                    f"日期: {transaction_date}\n"
                                    f"类型: {transaction_type}\n"
                                    f"类别: {category} - {subcategory}\n"
                                    f"金额: ¥{abs(amount):.2f}\n"
-                                   f"删除后将无法恢复！",
-                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        
-        if reply == QMessageBox.StandardButton.Yes:
+                                   f"删除后将无法恢复！"):
             self.db_manager.delete_transaction(transaction_data[0])
             self.load_transactions()
             
@@ -2003,7 +1751,7 @@ class MainWindow(QMainWindow):
             if account:
                 self.db_manager.update_account_balance(account, -amount)
             
-            QMessageBox.information(self, "成功", "交易记录删除成功！")
+            MessageHelper.show_info(self, "成功", "交易记录删除成功！")
             # 刷新相关页面
             if hasattr(self, 'asset_widget'):
                 self.asset_widget.load_accounts()
