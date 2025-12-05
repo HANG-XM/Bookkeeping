@@ -872,6 +872,37 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.load_ledgers()
         self.apply_theme()
+        
+        # 尝试自动打开上次账本
+        self.auto_open_last_ledger()
+    
+    def auto_open_last_ledger(self):
+        """自动打开上次使用的账本"""
+        from PyQt6.QtCore import QSettings
+        settings = QSettings()
+        
+        auto_open = settings.value("auto_open_last_ledger", False, type=bool)
+        if auto_open:
+            last_ledger_id = settings.value("last_ledger_id", None, type=int)
+            if last_ledger_id and last_ledger_id in self.ledgers:
+                ledger_info = self.ledgers[last_ledger_id]
+                self.current_ledger_label.setText(f"当前账本: {ledger_info['name']} ({ledger_info['type']})")
+                self.current_ledger_id = last_ledger_id
+                self.initialize_search_controls()
+                self.load_transactions()
+                
+                # 显示提示信息
+                MessageHelper.show_info(self, "提示", f"已自动打开上次账本: {ledger_info['name']}")
+    
+    def save_current_ledger(self):
+        """保存当前账本信息"""
+        if self.current_ledger_id and self.current_ledger_id in self.ledgers:
+            from PyQt6.QtCore import QSettings
+            settings = QSettings()
+            
+            ledger_info = self.ledgers[self.current_ledger_id]
+            settings.setValue("last_ledger_id", self.current_ledger_id)
+            settings.setValue("last_ledger_info", f"{ledger_info['name']} ({ledger_info['type']})")
     
     def apply_theme(self):
         """应用主题到整个应用"""
@@ -973,7 +1004,11 @@ class MainWindow(QMainWindow):
         dialog = ThemeSelectionDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.apply_theme()
-            MessageHelper.show_info(self, "成功", "主题已成功应用！")
+    
+    def on_settings_changed(self):
+        """设置变更后的处理"""
+        # 可以在这里添加设置变更后的处理逻辑
+        pass
     
     def create_ledger_panel(self):
         widget = QWidget()
@@ -1344,6 +1379,9 @@ class MainWindow(QMainWindow):
             self.current_ledger_id = ledger_id
             self.initialize_search_controls()
             self.load_transactions()
+            
+            # 保存当前账本信息
+            self.save_current_ledger()
     
     def load_transactions(self, filtered_transactions=None):
         if not self.current_ledger_id:

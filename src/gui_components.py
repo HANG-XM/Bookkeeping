@@ -92,16 +92,66 @@ class SystemSettingsDialog(QDialog):
         """)
         settings_layout.addWidget(theme_info)
         
-        # 其他设置（预留）
-        other_settings_label = QLabel("其他设置功能正在开发中...")
-        other_settings_label.setStyleSheet(f"""
-            QLabel {{
-                color: {theme_manager.get_color('secondary_text')};
-                font-style: italic;
+        # 账本设置
+        ledger_separator = QFrame()
+        ledger_separator.setFrameShape(QFrame.Shape.HLine)
+        ledger_separator.setStyleSheet(f"color: {theme_manager.get_color('border')};")
+        settings_layout.addWidget(ledger_separator)
+        
+        # 自动打开上次账本
+        ledger_settings_layout = QVBoxLayout()
+        self.auto_open_check = QCheckBox("启动时自动打开上次使用的账本")
+        self.auto_open_check.setStyleSheet(f"""
+            QCheckBox {{
+                color: {theme_manager.get_color('primary_text')};
                 background-color: transparent;
+                font-size: 14px;
             }}
         """)
-        settings_layout.addWidget(other_settings_label)
+        
+        # 获取设置状态
+        from PyQt6.QtCore import QSettings
+        settings = QSettings()
+        auto_open = settings.value("auto_open_last_ledger", False, type=bool)
+        self.auto_open_check.setChecked(auto_open)
+        
+        # 上次账本信息
+        last_ledger_info = settings.value("last_ledger_info", "")
+        if last_ledger_info:
+            self.last_ledger_label = QLabel(f"上次账本: {last_ledger_info}")
+        else:
+            self.last_ledger_label = QLabel("尚未保存账本信息")
+        self.last_ledger_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-size: 12px;
+                font-style: italic;
+                background-color: transparent;
+                padding: 5px 0;
+            }}
+        """)
+        
+        ledger_settings_layout.addWidget(self.auto_open_check)
+        ledger_settings_layout.addWidget(self.last_ledger_label)
+        
+        # 账本设置说明
+        ledger_info = QLabel("启用此功能后，程序启动时会自动打开上次使用的账本，省去手动选择的步骤。")
+        ledger_info.setWordWrap(True)
+        ledger_info.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-size: 12px;
+                padding: 10px;
+                background-color: {theme_manager.get_color('secondary_background')};
+                border-radius: 4px;
+            }}
+        """)
+        ledger_settings_layout.addWidget(ledger_info)
+        
+        settings_layout.addLayout(ledger_settings_layout)
+        
+        settings_group.setLayout(settings_layout)
+        layout.addWidget(settings_group)
         
         settings_group.setLayout(settings_layout)
         layout.addWidget(settings_group)
@@ -110,13 +160,33 @@ class SystemSettingsDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
+        save_btn = QPushButton("保存设置")
+        save_btn.clicked.connect(self.save_settings)
+        StyleHelper.apply_button_style(save_btn)
+        button_layout.addWidget(save_btn)
+        
         close_btn = QPushButton("关闭")
-        close_btn.clicked.connect(self.accept)
+        close_btn.clicked.connect(self.reject)
         StyleHelper.apply_button_style(close_btn)
         button_layout.addWidget(close_btn)
         
         layout.addLayout(button_layout)
         self.setLayout(layout)
+    
+    def save_settings(self):
+        """保存设置"""
+        from PyQt6.QtCore import QSettings
+        settings = QSettings()
+        
+        # 保存自动打开账本设置
+        settings.setValue("auto_open_last_ledger", self.auto_open_check.isChecked())
+        
+        # 通知父窗口（如果需要）
+        if hasattr(self.parent(), 'on_settings_changed'):
+            self.parent().on_settings_changed()
+        
+        MessageHelper.show_info(self, "成功", "设置已保存！")
+        self.accept()
     
     def open_theme_settings(self):
         """打开主题设置"""
