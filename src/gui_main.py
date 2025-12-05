@@ -687,29 +687,33 @@ class StatisticsWidget(QWidget):
         stats_content = QWidget()
         stats_layout = QVBoxLayout()
         
-        # 收支汇总卡片
+        # 收支汇总卡片（居中分布）
         summary_cards_layout = QHBoxLayout()
         summary_cards_layout.setSpacing(15)
         summary_cards_layout.setContentsMargins(10, 5, 10, 5)
-        
+
+        # 使用左右及中间拉伸项使卡片在行内居中且均匀分布
+        summary_cards_layout.addStretch()
+
         # 总收入卡片
         income_card = self.create_summary_card("总收入", "#4CAF50", "#E8F5E8")
         self.income_card_amount = income_card.findChild(QLabel, "card_amount")
         self.income_card_chinese = income_card.findChild(QLabel, "card_chinese")
         summary_cards_layout.addWidget(income_card)
-        
+        summary_cards_layout.addStretch()
+
         # 总支出卡片
         expense_card = self.create_summary_card("总支出", "#F44336", "#FFEBEE")
         self.expense_card_amount = expense_card.findChild(QLabel, "card_amount")
         self.expense_card_chinese = expense_card.findChild(QLabel, "card_chinese")
         summary_cards_layout.addWidget(expense_card)
-        
+        summary_cards_layout.addStretch()
+
         # 净收支卡片
         net_card = self.create_summary_card("净收支", "#2196F3", "#E3F2FD")
         self.net_card_amount = net_card.findChild(QLabel, "card_amount")
         self.net_card_chinese = net_card.findChild(QLabel, "card_chinese")
         summary_cards_layout.addWidget(net_card)
-        
         summary_cards_layout.addStretch()
         stats_layout.addLayout(summary_cards_layout)
         
