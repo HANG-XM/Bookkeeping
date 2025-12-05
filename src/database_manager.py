@@ -359,6 +359,23 @@ class DatabaseManager:
             transfers = cursor.fetchall()
         return transfers
     
+    def update_transfer(self, transfer_id, transfer_date, from_account, to_account, amount, description):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE transfers SET 
+                    transfer_date = ?, from_account = ?, to_account = ?, 
+                    amount = ?, description = ?
+                WHERE id = ?
+            ''', (transfer_date, from_account, to_account, amount, description, transfer_id))
+            conn.commit()
+    
+    def delete_transfer(self, transfer_id):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM transfers WHERE id = ?', (transfer_id,))
+            conn.commit()
+    
     def get_transactions_by_date_range(self, start_date, end_date, ledger_id=None):
         """获取指定日期范围内的交易记录"""
         with self.get_connection() as conn:

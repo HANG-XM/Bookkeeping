@@ -159,6 +159,121 @@ class TransferDialog(QDialog):
         }
 
 
+class EditTransferDialog(QDialog):
+    """编辑转账对话框"""
+    
+    def __init__(self, transfer_data, db_manager, parent=None):
+        super().__init__(parent)
+        self.transfer_data = transfer_data
+        self.db_manager = db_manager
+        self.setWindowTitle("编辑转账")
+        self.setModal(True)
+        self.setup_ui()
+        self.load_accounts()
+        self.load_transfer_data()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+        
+        # 转账日期
+        self.date_edit = QDateTimeEdit()
+        self.date_edit.setDisplayFormat("yyyy-MM-dd")
+        
+        # 转出账户
+        self.from_account_combo = QComboBox()
+        
+        # 转入账户
+        self.to_account_combo = QComboBox()
+        
+        # 转账金额
+        self.amount_spin = QDoubleSpinBox()
+        self.amount_spin.setRange(0, 999999.99)
+        self.amount_spin.setDecimals(2)
+        self.amount_spin.setPrefix("¥")
+        
+        # 备注
+        self.description_edit = QLineEdit()
+        
+        transfer_date_label = QLabel("转账日期:")
+        StyleHelper.apply_label_style(transfer_date_label)
+        form_layout.addRow(transfer_date_label, self.date_edit)
+        
+        from_account_label = QLabel("转出账户:")
+        StyleHelper.apply_label_style(from_account_label)
+        form_layout.addRow(from_account_label, self.from_account_combo)
+        
+        to_account_label = QLabel("转入账户:")
+        StyleHelper.apply_label_style(to_account_label)
+        form_layout.addRow(to_account_label, self.to_account_combo)
+        
+        transfer_amount_label = QLabel("转账金额:")
+        StyleHelper.apply_label_style(transfer_amount_label)
+        form_layout.addRow(transfer_amount_label, self.amount_spin)
+        
+        transfer_note_label = QLabel("备注:")
+        StyleHelper.apply_label_style(transfer_note_label)
+        form_layout.addRow(transfer_note_label, self.description_edit)
+        
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(form_layout)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def load_accounts(self):
+        accounts = self.db_manager.get_accounts()
+        self.from_account_combo.clear()
+        self.to_account_combo.clear()
+        
+        for account in accounts:
+            self.from_account_combo.addItem(f"{account[1]} (余额: ¥{account[3]:.2f})")
+            self.to_account_combo.addItem(f"{account[1]} (余额: ¥{account[3]:.2f})")
+    
+    def load_transfer_data(self):
+        """加载转账数据"""
+        if self.transfer_data:
+            (transfer_id, transfer_date, from_account, to_account, amount, description, created_time) = self.transfer_data
+            self.date_edit.setDate(QDate.fromString(transfer_date, "yyyy-MM-dd"))
+            
+            # 设置转出账户
+            for i in range(self.from_account_combo.count()):
+                account_text = self.from_account_combo.itemText(i)
+                if account_text.startswith(from_account):
+                    self.from_account_combo.setCurrentIndex(i)
+                    break
+            
+            # 设置转入账户
+            for i in range(self.to_account_combo.count()):
+                account_text = self.to_account_combo.itemText(i)
+                if account_text.startswith(to_account):
+                    self.to_account_combo.setCurrentIndex(i)
+                    break
+            
+            self.amount_spin.setValue(amount)
+            self.description_edit.setText(description or "")
+    
+    def get_data(self):
+        # 提取账户名称（去掉余额信息）
+        from_account = self.from_account_combo.currentText().split(" (余额:")[0]
+        to_account = self.to_account_combo.currentText().split(" (余额:")[0]
+        
+        return {
+            'id': self.transfer_data[0] if self.transfer_data else None,
+            'transfer_date': self.date_edit.date().toString("yyyy-MM-dd"),
+            'from_account': from_account,
+            'to_account': to_account,
+            'amount': self.amount_spin.value(),
+            'description': self.description_edit.text()
+        }
+
+
 class AssetManagementWidget(QWidget):
     def __init__(self, db_manager):
         super().__init__()
@@ -206,7 +321,13 @@ class AssetManagementWidget(QWidget):
         transfer_btn_layout = QHBoxLayout()
         add_transfer_btn = QPushButton("新增转账")
         add_transfer_btn.clicked.connect(self.add_transfer)
+        edit_transfer_btn = QPushButton("编辑转账")
+        edit_transfer_btn.clicked.connect(self.edit_transfer)
+        delete_transfer_btn = QPushButton("删除转账")
+        delete_transfer_btn.clicked.connect(self.delete_transfer)
         transfer_btn_layout.addWidget(add_transfer_btn)
+        transfer_btn_layout.addWidget(edit_transfer_btn)
+        transfer_btn_layout.addWidget(delete_transfer_btn)
         transfer_btn_layout.addStretch()
         transfer_layout.addLayout(transfer_btn_layout)
         
@@ -350,6 +471,108 @@ class AssetManagementWidget(QWidget):
                 if parent and hasattr(parent, 'statistics_widget'):
                     parent.statistics_widget.update_statistics()
                 MessageHelper.show_info(self, "成功", "转账记录添加成功！")
+    
+    def edit_transfer(self):
+        current_row = self.transfer_table.currentRow()
+        if current_row < 0:
+            MessageHelper.show_warning(self, "警告", "请先选择要编辑的转账记录！")
+            return
+        
+        # 获取选中的转账记录数据
+        transfers = self.db_manager.get_transfers()
+        if current_row >= len(transfers):
+            MessageHelper.show_warning(self, "警告", "找不到选中的转账记录！")
+            return
+        
+        transfer_data = transfers[current_row]
+        
+        dialog = EditTransferDialog(transfer_data, self.db_manager, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            if data['from_account'] and data['to_account'] and data['amount'] > 0:
+                if data['from_account'] == data['to_account']:
+                    MessageHelper.show_warning(self, "警告", "转出账户和转入账户不能相同！")
+                    return
+                
+                # 获取原始转账数据以计算余额变化
+                old_from_account = transfer_data[2]
+                old_to_account = transfer_data[3]
+                old_amount = transfer_data[4]
+                
+                # 如果转出账户或金额发生变化，需要检查新转出账户的余额
+                if old_from_account != data['from_account'] or old_amount != data['amount']:
+                    # 先恢复原始转账对账户余额的影响
+                    self.db_manager.update_account_balance(old_from_account, old_amount)
+                    self.db_manager.update_account_balance(old_to_account, -old_amount)
+                    
+                    # 检查新转出账户余额
+                    from_balance = self.db_manager.get_account_balance(data['from_account'])
+                    if from_balance < data['amount']:
+                        # 恢复原始转账记录
+                        self.db_manager.update_account_balance(old_from_account, -old_amount)
+                        self.db_manager.update_account_balance(old_to_account, old_amount)
+                        MessageHelper.show_warning(self, "警告", f"转出账户余额不足！当前余额: ¥{from_balance:.2f}")
+                        return
+                
+                    # 应用新的转账对账户余额的影响
+                    self.db_manager.update_account_balance(data['from_account'], -data['amount'])
+                    self.db_manager.update_account_balance(data['to_account'], data['amount'])
+                elif old_to_account != data['to_account']:
+                    # 只有转入账户发生变化
+                    self.db_manager.update_account_balance(old_to_account, -old_amount)
+                    self.db_manager.update_account_balance(data['to_account'], data['amount'])
+                
+                self.db_manager.update_transfer(
+                    data['id'], data['transfer_date'], data['from_account'], 
+                    data['to_account'], data['amount'], data['description']
+                )
+                self.load_accounts()
+                self.load_transfers()
+                # 刷新统计页面
+                parent = self.parent()
+                if parent and hasattr(parent, 'statistics_widget'):
+                    parent.statistics_widget.update_statistics()
+                MessageHelper.show_info(self, "成功", "转账记录修改成功！")
+    
+    def delete_transfer(self):
+        current_row = self.transfer_table.currentRow()
+        if current_row < 0:
+            MessageHelper.show_warning(self, "警告", "请先选择要删除的转账记录！")
+            return
+        
+        # 获取选中的转账记录数据
+        transfers = self.db_manager.get_transfers()
+        if current_row >= len(transfers):
+            MessageHelper.show_warning(self, "警告", "找不到选中的转账记录！")
+            return
+        
+        transfer_data = transfers[current_row]
+        transfer_date = transfer_data[1]
+        from_account = transfer_data[2]
+        to_account = transfer_data[3]
+        amount = transfer_data[4]
+        description = transfer_data[5]
+        
+        if not MessageHelper.ask_confirmation(self, "确认删除", 
+                                   f"确定要删除这条转账记录吗？\n"
+                                   f"日期: {transfer_date}\n"
+                                   f"转出账户: {from_account}\n"
+                                   f"转入账户: {to_account}\n"
+                                   f"金额: ¥{amount:.2f}\n"
+                                   f"备注: {description or '无'}\n"
+                                   f"删除后将无法恢复！"):
+            # 恢复账户余额（删除转账需要反向操作）
+            self.db_manager.update_account_balance(from_account, amount)
+            self.db_manager.update_account_balance(to_account, -amount)
+            
+            self.db_manager.delete_transfer(transfer_data[0])
+            self.load_accounts()
+            self.load_transfers()
+            # 刷新统计页面
+            parent = self.parent()
+            if parent and hasattr(parent, 'statistics_widget'):
+                parent.statistics_widget.update_statistics()
+            MessageHelper.show_info(self, "成功", "转账记录删除成功！")
 
 
 class StatisticsWidget(QWidget):
