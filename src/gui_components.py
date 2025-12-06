@@ -244,7 +244,7 @@ class SystemSettingsDialog(QDialog):
     
     def open_theme_settings(self):
         """打开主题设置"""
-        from dialogs import ThemeSelectionDialog
+        # ThemeSelectionDialog 在本模块中定义，直接使用以避免循环导入
         dialog = ThemeSelectionDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # 主题已更改，重新应用样式
