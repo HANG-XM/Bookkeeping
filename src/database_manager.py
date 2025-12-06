@@ -578,6 +578,103 @@ class DatabaseManager:
             'total_amount': settled_amount + unsettled_amount
         }
     
+    def get_day_transactions(self, date, ledger_id=None):
+        """获取指定日期的所有交易记录"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ledger_id:
+                cursor.execute('''
+                    SELECT created_time, transaction_type, category, subcategory, amount, account, description
+                    FROM transactions 
+                    WHERE transaction_date = ? AND ledger_id = ?
+                    ORDER BY created_time
+                ''', (date, ledger_id))
+            else:
+                cursor.execute('''
+                    SELECT created_time, transaction_type, category, subcategory, amount, account, description
+                    FROM transactions 
+                    WHERE transaction_date = ?
+                    ORDER BY created_time
+                ''', (date,))
+            
+            transactions = cursor.fetchall()
+        return transactions
+    
+    def get_week_trends(self, start_date, end_date, ledger_id=None):
+        """获取一周内每日收支趋势"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ledger_id:
+                cursor.execute('''
+                    SELECT transaction_date,
+                           SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                           SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                           COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ? AND ledger_id = ?
+                    GROUP BY transaction_date
+                    ORDER BY transaction_date
+                ''', (start_date, end_date, ledger_id))
+            else:
+                cursor.execute('''
+                    SELECT transaction_date,
+                           SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) as income,
+                           SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) as expense,
+                           COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date BETWEEN ? AND ?
+                    GROUP BY transaction_date
+                    ORDER BY transaction_date
+                ''', (start_date, end_date))
+            
+            results = cursor.fetchall()
+        return results
+    
+    def get_peak_consumption_hours(self, date, ledger_id=None):
+        """获取指定日期的消费峰值时段"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if ledger_id:
+                cursor.execute('''
+                    SELECT 
+                        CASE 
+                            WHEN CAST(substr(created_time, 12, 2) AS INTEGER) BETWEEN 6 AND 11 THEN '06:00-12:00'
+                            WHEN CAST(substr(created_time, 12, 2) AS INTEGER) BETWEEN 12 AND 17 THEN '12:00-18:00'
+                            WHEN CAST(substr(created_time, 12, 2) AS INTEGER) BETWEEN 18 AND 23 THEN '18:00-24:00'
+                            ELSE '00:00-06:00'
+                        END as time_period,
+                        SUM(ABS(amount)) as total_amount,
+                        COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date = ? AND ledger_id = ? AND amount < 0
+                    GROUP BY time_period
+                    ORDER BY total_amount DESC
+                    LIMIT 1
+                ''', (date, ledger_id))
+            else:
+                cursor.execute('''
+                    SELECT 
+                        CASE 
+                            WHEN CAST(substr(created_time, 12, 2) AS INTEGER) BETWEEN 6 AND 11 THEN '06:00-12:00'
+                            WHEN CAST(substr(created_time, 12, 2) AS INTEGER) BETWEEN 12 AND 17 THEN '12:00-18:00'
+                            WHEN CAST(substr(created_time, 12, 2) AS INTEGER) BETWEEN 18 AND 23 THEN '18:00-24:00'
+                            ELSE '00:00-06:00'
+                        END as time_period,
+                        SUM(ABS(amount)) as total_amount,
+                        COUNT(*) as count
+                    FROM transactions 
+                    WHERE transaction_date = ? AND amount < 0
+                    GROUP BY time_period
+                    ORDER BY total_amount DESC
+                    LIMIT 1
+                ''', (date,))
+            
+            result = cursor.fetchone()
+        return result
+    
     def get_refund_statistics(self, start_date, end_date, ledger_id=None):
         """获取退款统计"""
         with self.get_connection() as conn:

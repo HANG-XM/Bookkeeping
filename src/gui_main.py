@@ -731,38 +731,120 @@ class StatisticsWidget(QWidget):
         calculation_note.setWordWrap(True)
         stats_layout.addWidget(calculation_note)
         
-        # 收支结构和账户分布图表
-        charts_layout = QHBoxLayout()
+        # 视图专属统计内容区域
+        self.view_specific_widget = QWidget()
+        self.view_specific_layout = QVBoxLayout(self.view_specific_widget)
+        
+        # 默认的收支结构和账户分布图表（月视图、年视图、自定义时间使用）
+        self.default_charts_layout = QHBoxLayout()
         
         # 收入结构饼图
-        income_structure_group = QGroupBox("收入结构")
+        self.income_structure_group = QGroupBox("收入结构")
         self.income_figure = Figure(figsize=(4, 3))
         self.income_canvas = FigureCanvas(self.income_figure)
         income_structure_layout = QVBoxLayout()
         income_structure_layout.addWidget(self.income_canvas)
-        income_structure_group.setLayout(income_structure_layout)
+        self.income_structure_group.setLayout(income_structure_layout)
         
         # 支出结构饼图
-        expense_structure_group = QGroupBox("支出结构")
+        self.expense_structure_group = QGroupBox("支出结构")
         self.expense_figure = Figure(figsize=(4, 3))
         self.expense_canvas = FigureCanvas(self.expense_figure)
         expense_structure_layout = QVBoxLayout()
         expense_structure_layout.addWidget(self.expense_canvas)
-        expense_structure_group.setLayout(expense_structure_layout)
+        self.expense_structure_group.setLayout(expense_structure_layout)
         
         # 账户分布饼图
-        account_distribution_group = QGroupBox("账户分布")
+        self.account_distribution_group = QGroupBox("账户分布")
         self.account_figure = Figure(figsize=(4, 3))
         self.account_canvas = FigureCanvas(self.account_figure)
         account_distribution_layout = QVBoxLayout()
         account_distribution_layout.addWidget(self.account_canvas)
-        account_distribution_group.setLayout(account_distribution_layout)
+        self.account_distribution_group.setLayout(account_distribution_layout)
         
-        charts_layout.addWidget(income_structure_group)
-        charts_layout.addWidget(expense_structure_group)
-        charts_layout.addWidget(account_distribution_group)
+        self.default_charts_layout.addWidget(self.income_structure_group)
+        self.default_charts_layout.addWidget(self.expense_structure_group)
+        self.default_charts_layout.addWidget(self.account_distribution_group)
         
-        stats_layout.addLayout(charts_layout)
+        # 日视图专属内容
+        self.day_view_widget = QWidget()
+        day_view_layout = QVBoxLayout(self.day_view_widget)
+        
+        # 日视图排序选项
+        day_sort_layout = QHBoxLayout()
+        day_sort_label = QLabel("排序方式:")
+        StyleHelper.apply_label_style(day_sort_label)
+        self.day_sort_combo = QComboBox()
+        self.day_sort_combo.addItems(["按时间排序", "按金额排序"])
+        self.day_sort_combo.currentTextChanged.connect(self.update_day_view)
+        day_sort_layout.addWidget(day_sort_label)
+        day_sort_layout.addWidget(self.day_sort_combo)
+        day_sort_layout.addStretch()
+        day_view_layout.addLayout(day_sort_layout)
+        
+        # 当日详细记录表格
+        self.day_table_widget = QWidget()
+        day_table_layout = QVBoxLayout(self.day_table_widget)
+        
+        day_table_label = QLabel("当日记账记录明细")
+        day_table_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        day_table_layout.addWidget(day_table_label)
+        
+        # 创建日视图表格
+        self.day_transaction_table = QTableWidget()
+        self.day_transaction_table.setColumnCount(6)
+        self.day_transaction_table.setHorizontalHeaderLabels(["时间", "类别", "子类别", "金额", "账户", "备注"])
+        self.day_transaction_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.day_transaction_table.setSortingEnabled(True)
+        day_table_layout.addWidget(self.day_transaction_table)
+        
+        # 收支峰值时段标签
+        self.peak_time_label = QLabel("")
+        self.peak_time_label.setStyleSheet("""
+            QLabel {
+                background-color: #E3F2FD;
+                border: 1px solid #2196F3;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: bold;
+                color: #1976D2;
+            }
+        """)
+        day_table_layout.addWidget(self.peak_time_label)
+        
+        day_view_layout.addWidget(self.day_table_widget)
+        
+        # 周视图专属内容
+        self.week_view_widget = QWidget()
+        week_view_layout = QVBoxLayout(self.week_view_widget)
+        
+        # 周视图折线图
+        week_chart_label = QLabel("本周每日收支趋势")
+        week_chart_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        week_view_layout.addWidget(week_chart_label)
+        
+        self.week_figure = Figure(figsize=(10, 6))
+        self.week_canvas = FigureCanvas(self.week_figure)
+        week_view_layout.addWidget(self.week_canvas)
+        
+        # 单日明细查看按钮区域
+        week_detail_layout = QHBoxLayout()
+        week_detail_label = QLabel("查看单日明细:")
+        StyleHelper.apply_label_style(week_detail_label)
+        week_detail_layout.addWidget(week_detail_label)
+        
+        self.week_day_combo = QComboBox()
+        self.week_day_combo.currentTextChanged.connect(self.show_week_day_detail)
+        week_detail_layout.addWidget(self.week_day_combo)
+        
+        week_detail_layout.addStretch()
+        week_view_layout.addLayout(week_detail_layout)
+        
+        # 初始时显示默认图表
+        self.default_charts_widget = QWidget()
+        self.default_charts_widget.setLayout(self.default_charts_layout)
+        self.view_specific_layout.addWidget(self.default_charts_widget)
+        stats_layout.addWidget(self.view_specific_widget)
         
         # 核心字段关联统计
         core_stats_layout = QHBoxLayout()
@@ -852,8 +934,32 @@ class StatisticsWidget(QWidget):
             self.prev_btn.show()
             self.next_btn.show()
         
+        # 切换视图专属内容
+        self.switch_view_content()
+        
         self.update_date_display()
         self.update_statistics()
+    
+    def switch_view_content(self):
+        """切换视图专属内容"""
+        # 清除当前视图内容
+        for i in reversed(range(self.view_specific_layout.count())):
+            child = self.view_specific_layout.itemAt(i).widget()
+            if child:
+                child.setParent(None)
+        
+        # 根据视图类型添加对应内容
+        if self.current_view == "day":
+            # 日视图：饼图 + 专属内容
+            self.view_specific_layout.addWidget(self.default_charts_widget)
+            self.view_specific_layout.addWidget(self.day_view_widget)
+        elif self.current_view == "week":
+            # 周视图：饼图 + 专属内容
+            self.view_specific_layout.addWidget(self.default_charts_widget)
+            self.view_specific_layout.addWidget(self.week_view_widget)
+        else:  # month, year, custom
+            # 其他视图：只显示饼图
+            self.view_specific_layout.addWidget(self.default_charts_widget)
     
     def update_date_display(self):
         """更新日期显示"""
@@ -1088,6 +1194,164 @@ class StatisticsWidget(QWidget):
             # 重新启用UI更新
             self.setUpdatesEnabled(True)
             self.update()
+        
+        # 更新视图专属内容
+        self.update_view_specific_content()
+    
+    def update_view_specific_content(self):
+        """更新视图专属的统计内容"""
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def update_day_view(self):
+        """更新日视图内容"""
+        current_date_str = self.current_date.toString("yyyy-MM-dd")
+        transactions = self.db_manager.get_day_transactions(current_date_str)
+        
+        # 更新表格数据
+        self.day_transaction_table.setRowCount(len(transactions))
+        
+        sort_by_time = self.day_sort_combo.currentText() == "按时间排序"
+        
+        # 根据排序方式重新组织数据
+        if not sort_by_time:
+            # 按金额排序
+            transactions_sorted = sorted(transactions, key=lambda x: abs(x[4]), reverse=True)
+        else:
+            transactions_sorted = transactions
+        
+        for row, trans in enumerate(transactions_sorted):
+            (created_time, transaction_type, category, subcategory, amount, account, description) = trans
+            # 只显示时间部分
+            time_only = created_time.split(" ")[1][:5] if " " in created_time else created_time
+            self.day_transaction_table.setItem(row, 0, QTableWidgetItem(time_only))
+            self.day_transaction_table.setItem(row, 1, QTableWidgetItem(category))
+            self.day_transaction_table.setItem(row, 2, QTableWidgetItem(subcategory))
+            self.day_transaction_table.setItem(row, 3, QTableWidgetItem(f"¥{abs(amount):.2f}"))
+            self.day_transaction_table.setItem(row, 4, QTableWidgetItem(account or ""))
+            self.day_transaction_table.setItem(row, 5, QTableWidgetItem(description or ""))
+        
+        # 获取消费峰值时段
+        peak_result = self.db_manager.get_peak_consumption_hours(current_date_str)
+        if peak_result:
+            time_period, total_amount, count = peak_result
+            self.peak_time_label.setText(f"🔥 消费峰值时段：{time_period} 消费 ¥{total_amount:.2f}（{count}笔）")
+        else:
+            self.peak_time_label.setText("📊 当日暂无消费记录")
+    
+    def update_week_view(self):
+        """更新周视图内容"""
+        start_date, end_date = self.get_date_range()
+        week_trends = self.db_manager.get_week_trends(start_date, end_date)
+        
+        if not week_trends:
+            # 显示空图表
+            self.week_figure.clear()
+            ax = self.week_figure.add_subplot(111)
+            ax.text(0.5, 0.5, '本周暂无数据', ha='center', va='center', fontsize=12)
+            ax.set_title("本周每日收支趋势")
+            ChartUtils.safe_draw_canvas(self.week_canvas)
+            return
+        
+        # 准备数据
+        dates = [item[0][5:] for item in week_trends]  # 只取MM-DD部分
+        incomes = [item[1] for item in week_trends]
+        expenses = [item[2] for item in week_trends]
+        net_incomes = [income - expense for income, expense in zip(incomes, expenses)]
+        
+        # 创建折线图
+        self.week_figure.clear()
+        ax = self.week_figure.add_subplot(111)
+        
+        # 绘制收入和支出折线
+        ax.plot(dates, incomes, marker='o', label='收入', color='#4CAF50', linewidth=2)
+        ax.plot(dates, expenses, marker='s', label='支出', color='#F44336', linewidth=2)
+        ax.plot(dates, net_incomes, marker='^', label='净收支', color='#2196F3', linewidth=2, linestyle='--')
+        
+        # 设置图表样式
+        ax.set_title('本周每日收支趋势', fontsize=14, fontweight='bold')
+        ax.set_xlabel('日期', fontsize=12)
+        ax.set_ylabel('金额 (¥)', fontsize=12)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # 格式化Y轴显示
+        from matplotlib.ticker import FuncFormatter
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'¥{x:.0f}'))
+        
+        # 旋转X轴标签
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+        
+        # 调整布局
+        self.week_figure.tight_layout()
+        
+        ChartUtils.safe_draw_canvas(self.week_canvas)
+        
+        # 更新日期选择下拉框
+        self.week_day_combo.clear()
+        for item in week_trends:
+            date_str = item[0]
+            display_text = f"{date_str[5:]} (收入: ¥{item[1]:.2f}, 支出: ¥{item[2]:.2f})"
+            self.week_day_combo.addItem(display_text, date_str)
+    
+    def show_week_day_detail(self, display_text):
+        """显示周视图中单日的详细记录"""
+        selected_date = self.week_day_combo.currentData()
+        if not selected_date:
+            return
+        
+        # 获取选中日期的详细交易记录
+        transactions = self.db_manager.get_day_transactions(selected_date)
+        
+        if not transactions:
+            MessageHelper.show_info(self, "提示", f"{selected_date} 暂无交易记录")
+            return
+        
+        # 创建详情对话框
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QTableWidget, QTableWidgetItem
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"{selected_date} 详细记录")
+        dialog.setModal(True)
+        dialog.resize(800, 400)
+        
+        layout = QVBoxLayout()
+        
+        # 标题
+        title_label = QLabel(f"{selected_date} 交易记录明细")
+        title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        layout.addWidget(title_label)
+        
+        # 表格
+        detail_table = QTableWidget()
+        detail_table.setColumnCount(7)
+        detail_table.setHorizontalHeaderLabels(["时间", "类型", "类别", "子类别", "金额", "账户", "备注"])
+        detail_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        
+        detail_table.setRowCount(len(transactions))
+        for row, trans in enumerate(transactions):
+            (created_time, transaction_type, category, subcategory, amount, account, description) = trans
+            time_only = created_time.split(" ")[1] if " " in created_time else created_time
+            detail_table.setItem(row, 0, QTableWidgetItem(time_only))
+            detail_table.setItem(row, 1, QTableWidgetItem(transaction_type))
+            detail_table.setItem(row, 2, QTableWidgetItem(category))
+            detail_table.setItem(row, 3, QTableWidgetItem(subcategory))
+            detail_table.setItem(row, 4, QTableWidgetItem(f"¥{abs(amount):.2f}"))
+            detail_table.setItem(row, 5, QTableWidgetItem(account or ""))
+            detail_table.setItem(row, 6, QTableWidgetItem(description or ""))
+        
+        layout.addWidget(detail_table)
+        
+        # 关闭按钮
+        from PyQt6.QtWidgets import QPushButton
+        close_btn = QPushButton("关闭")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        
+        dialog.setLayout(layout)
+        dialog.exec()
 
 
 class MainWindow(QMainWindow):
