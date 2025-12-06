@@ -1378,14 +1378,17 @@ class ImportDialog(BaseDialog):
 
 
 class DataManagementDialog(BaseDialog):
-    """数据管理主对话框"""
+    """数据管理主对话框 - 优化版，集成所有功能减少弹窗"""
     
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.export_worker = None
+        self.import_worker = None
         self.setup_ui()
     
     def setup_ui(self):
+        """设置主界面，使用Tab布局集成导出导入功能"""
         layout = QVBoxLayout()
         
         # 标题
@@ -1395,67 +1398,588 @@ class DataManagementDialog(BaseDialog):
         StyleHelper.apply_label_style(title_label)
         layout.addWidget(title_label)
         
-        # 功能按钮区域
-        buttons_layout = QVBoxLayout()
+        # 创建Tab控件
+        self.tab_widget = QTabWidget()
+        
+        # 导出Tab
+        export_tab = self.create_export_tab()
+        self.tab_widget.addTab(export_tab, "📤 数据导出")
+        
+        # 导入Tab
+        import_tab = self.create_import_tab()
+        self.tab_widget.addTab(import_tab, "📥 数据导入")
+        
+        layout.addWidget(self.tab_widget)
+        
+        # 状态栏
+        self.create_status_bar(layout)
+        
+        self.setLayout(layout)
+        self.setMinimumSize(600, 500)
+        self.setMaximumSize(800, 700)
+    
+    def create_export_tab(self):
+        """创建导出功能页"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        # 导出设置区域
+        settings_frame = QFrame()
+        settings_frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        settings_layout = QVBoxLayout()
+        
+        # 导出范围
+        scope_group = QGroupBox("导出范围")
+        scope_layout = QVBoxLayout()
+        
+        self.export_scope_group = QButtonGroup()
+        self.all_radio = QRadioButton("全账本数据导出")
+        self.all_radio.setChecked(True)
+        self.filtered_radio = QRadioButton("筛选结果导出")
+        self.specific_radio = QRadioButton("指定数据类型导出")
+        
+        self.export_scope_group.addButton(self.all_radio, 0)
+        self.export_scope_group.addButton(self.filtered_radio, 1)
+        self.export_scope_group.addButton(self.specific_radio, 2)
+        
+        scope_layout.addWidget(self.all_radio)
+        scope_layout.addWidget(self.filtered_radio)
+        scope_layout.addWidget(self.specific_radio)
+        
+        scope_group.setLayout(scope_layout)
+        settings_layout.addWidget(scope_group)
+        
+        # 数据类型选择（仅在指定类型时显示）
+        self.data_type_group = QGroupBox("数据类型")
+        data_type_layout = QVBoxLayout()
+        
+        self.transactions_check = QCheckBox("记账记录")
+        self.transactions_check.setChecked(True)
+        self.budgets_check = QCheckBox("预算配置")
+        self.accounts_check = QCheckBox("账户信息")
+        
+        data_type_layout.addWidget(self.transactions_check)
+        data_type_layout.addWidget(self.budgets_check)
+        data_type_layout.addWidget(self.accounts_check)
+        
+        self.data_type_group.setLayout(data_type_layout)
+        self.data_type_group.hide()
+        
+        settings_layout.addWidget(self.data_type_group)
+        
+        # 导出格式和文件设置
+        format_group = QGroupBox("格式与文件设置")
+        format_layout = QVBoxLayout()
+        
+        # 格式选择
+        format_row = QHBoxLayout()
+        format_row.addWidget(QLabel("导出格式:"))
+        
+        self.export_format_group = QButtonGroup()
+        self.excel_radio = QRadioButton("Excel (.xlsx)")
+        self.excel_radio.setChecked(True)
+        self.csv_radio = QRadioButton("CSV")
+        
+        self.export_format_group.addButton(self.excel_radio, 0)
+        self.export_format_group.addButton(self.csv_radio, 1)
+        
+        format_row.addWidget(self.excel_radio)
+        format_row.addWidget(self.csv_radio)
+        format_row.addStretch()
+        
+        format_layout.addLayout(format_row)
+        
+        # 文件名设置
+        filename_row = QHBoxLayout()
+        filename_row.addWidget(QLabel("文件名:"))
+        self.filename_edit = QLineEdit()
+        self.filename_edit.setPlaceholderText("自动生成，可自定义")
+        filename_row.addWidget(self.filename_edit)
+        
+        browse_btn = QPushButton("浏览")
+        browse_btn.clicked.connect(self.browse_export_location)
+        browse_btn.setMaximumWidth(80)
+        filename_row.addWidget(browse_btn)
+        
+        format_layout.addLayout(filename_row)
+        format_group.setLayout(format_layout)
+        settings_layout.addWidget(format_group)
+        
+        settings_frame.setLayout(settings_layout)
+        layout.addWidget(settings_frame)
         
         # 导出按钮
-        export_group = QGroupBox("数据导出")
-        StyleHelper.apply_groupbox_style(export_group)
-        export_layout = QVBoxLayout()
+        self.export_btn = QPushButton("🚀 开始导出")
+        self.export_btn.setMinimumHeight(45)
+        self.export_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """)
+        self.export_btn.clicked.connect(self.start_export)
+        layout.addWidget(self.export_btn)
         
-        export_btn = QPushButton("📤 导出数据")
-        export_btn.clicked.connect(self.open_export_dialog)
-        export_btn.setMinimumHeight(50)
-        StyleHelper.apply_button_style(export_btn)
-        export_layout.addWidget(export_btn)
+        layout.addStretch()
+        tab.setLayout(layout)
         
-        export_info = QLabel("支持导出全账本数据、筛选结果或指定类型的数据，支持Excel和CSV格式")
-        export_info.setWordWrap(True)
-        export_info.setStyleSheet("color: #666; font-size: 12px; margin: 5px;")
-        export_layout.addWidget(export_info)
+        # 连接信号
+        self.export_scope_group.idClicked.connect(self.on_export_scope_changed)
         
-        export_group.setLayout(export_layout)
-        buttons_layout.addWidget(export_group)
+        return tab
+    
+    def create_import_tab(self):
+        """创建导入功能页"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        # 导入设置区域
+        settings_frame = QFrame()
+        settings_frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        settings_layout = QVBoxLayout()
+        
+        # 文件选择
+        file_group = QGroupBox("文件选择")
+        file_layout = QVBoxLayout()
+        
+        file_row = QHBoxLayout()
+        self.file_path_edit = QLineEdit()
+        self.file_path_edit.setPlaceholderText("请选择要导入的Excel或CSV文件")
+        self.file_path_edit.setReadOnly(True)
+        
+        select_file_btn = QPushButton("选择文件")
+        select_file_btn.clicked.connect(self.select_import_file)
+        select_file_btn.setMaximumWidth(100)
+        
+        file_row.addWidget(self.file_path_edit)
+        file_row.addWidget(select_file_btn)
+        file_layout.addLayout(file_row)
+        
+        file_group.setLayout(file_layout)
+        settings_layout.addWidget(file_group)
+        
+        # 导入选项
+        options_group = QGroupBox("导入选项")
+        options_layout = QVBoxLayout()
+        
+        # 导入模式
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("导入模式:"))
+        
+        self.import_mode_group = QButtonGroup()
+        self.append_radio = QRadioButton("追加模式")
+        self.append_radio.setChecked(True)
+        self.overwrite_radio = QRadioButton("覆盖模式")
+        
+        self.import_mode_group.addButton(self.append_radio, 0)
+        self.import_mode_group.addButton(self.overwrite_radio, 1)
+        
+        mode_row.addWidget(self.append_radio)
+        mode_row.addWidget(self.overwrite_radio)
+        mode_row.addStretch()
+        
+        options_layout.addLayout(mode_row)
+        
+        # 其他选项
+        self.skip_errors_check = QCheckBox("跳过错误行继续导入")
+        self.skip_errors_check.setChecked(True)
+        options_layout.addWidget(self.skip_errors_check)
+        
+        options_group.setLayout(options_layout)
+        settings_layout.addWidget(options_group)
+        
+        settings_frame.setLayout(settings_layout)
+        layout.addWidget(settings_frame)
+        
+        # 预览区域
+        preview_group = QGroupBox("数据预览")
+        preview_layout = QVBoxLayout()
+        
+        self.preview_table = QTableWidget()
+        self.preview_table.setMaximumHeight(200)
+        self.preview_table.setColumnCount(0)
+        self.preview_table.setRowCount(0)
+        
+        preview_layout.addWidget(self.preview_table)
+        preview_group.setLayout(preview_layout)
+        layout.addWidget(preview_group)
         
         # 导入按钮
-        import_group = QGroupBox("数据导入")
-        StyleHelper.apply_groupbox_style(import_group)
-        import_layout = QVBoxLayout()
+        self.import_btn = QPushButton("📥 开始导入")
+        self.import_btn.setMinimumHeight(45)
+        self.import_btn.setEnabled(False)
+        self.import_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """)
+        self.import_btn.clicked.connect(self.start_import)
+        layout.addWidget(self.import_btn)
         
-        import_btn = QPushButton("📥 导入数据")
-        import_btn.clicked.connect(self.open_import_dialog)
-        import_btn.setMinimumHeight(50)
-        StyleHelper.apply_button_style(import_btn)
-        import_layout.addWidget(import_btn)
+        layout.addStretch()
+        tab.setLayout(layout)
         
-        import_info = QLabel("支持导入记账记录、预算配置和账户信息，提供标准模板下载")
-        import_info.setWordWrap(True)
-        import_info.setStyleSheet("color: #666; font-size: 12px; margin: 5px;")
-        import_layout.addWidget(import_info)
+        return tab
+    
+    def create_status_bar(self, layout):
+        """创建状态栏"""
+        status_frame = QFrame()
+        status_frame.setFrameStyle(QFrame.Shape.StyledPanel)
+        status_layout = QVBoxLayout()
         
-        import_group.setLayout(import_layout)
-        buttons_layout.addWidget(import_group)
+        # 进度条
+        self.progress_bar = QProgressBar()
+        self.progress_bar.hide()
+        status_layout.addWidget(self.progress_bar)
         
-        layout.addLayout(buttons_layout)
+        # 状态标签
+        self.status_label = QLabel("准备就绪")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #666;
+                font-size: 12px;
+                padding: 5px;
+            }
+        """)
+        status_layout.addWidget(self.status_label)
         
-        # 关闭按钮
-        close_layout = QHBoxLayout()
-        close_layout.addStretch()
+        status_frame.setLayout(status_layout)
+        layout.addWidget(status_frame)
+    
+    def on_export_scope_changed(self, scope_id):
+        """导出范围变化时的处理"""
+        self.data_type_group.setVisible(scope_id == 2)  # 仅在选择指定类型时显示
+        self.update_filename_preview()
+    
+    def update_filename_preview(self):
+        """更新文件名预览"""
+        from datetime import datetime
+        import os
         
-        close_btn = QPushButton("关闭")
-        close_btn.clicked.connect(self.accept)
-        StyleHelper.apply_button_style(close_btn)
-        close_layout.addWidget(close_btn)
+        # 生成默认文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        layout.addLayout(close_layout)
-        self.setLayout(layout)
+        if self.all_radio.isChecked():
+            scope_name = "全账本"
+        elif self.filtered_radio.isChecked():
+            scope_name = "筛选结果"
+        else:
+            scope_types = []
+            if self.transactions_check.isChecked():
+                scope_types.append("记账")
+            if self.budgets_check.isChecked():
+                scope_types.append("预算")
+            if self.accounts_check.isChecked():
+                scope_types.append("账户")
+            scope_name = "".join(scope_types) if scope_types else "数据"
+        
+        if self.excel_radio.isChecked():
+            extension = ".xlsx"
+        else:
+            extension = ".csv"
+        
+        default_filename = f"日常消费-{scope_name}-{timestamp}{extension}"
+        
+        if not self.filename_edit.text() or self.filename_edit.text() == self.filename_edit.placeholderText():
+            self.filename_edit.setText(default_filename)
+    
+    def browse_export_location(self):
+        """浏览导出位置"""
+        from datetime import datetime
+        
+        # 确定文件格式
+        if self.excel_radio.isChecked():
+            file_filter = "Excel文件 (*.xlsx);;所有文件 (*)"
+            default_ext = ".xlsx"
+        else:
+            file_filter = "CSV文件 (*.csv);;所有文件 (*)"
+            default_ext = ".csv"
+        
+        # 获取默认文件名
+        filename = self.filename_edit.text() or f"导出数据{default_ext}"
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "选择导出位置", filename, file_filter
+        )
+        
+        if file_path:
+            if not file_path.endswith(default_ext):
+                file_path += default_ext
+            self.filename_edit.setText(file_path)
+    
+    def start_export(self):
+        """开始导出"""
+        try:
+            # 获取导出配置
+            export_config = self.get_export_config()
+            if not export_config:
+                return
+            
+            # 开始导出
+            self.export_btn.setEnabled(False)
+            self.progress_bar.show()
+            self.progress_bar.setValue(0)
+            self.status_label.setText("正在导出数据...")
+            
+            self.export_worker = ExportWorker(self.db_manager, export_config)
+            self.export_worker.progress_updated.connect(self.progress_bar.setValue)
+            self.export_worker.finished.connect(self.on_export_finished)
+            self.export_worker.error_occurred.connect(self.on_export_error)
+            self.export_worker.start()
+            
+        except Exception as e:
+            self.show_error(f"导出启动失败: {str(e)}")
+    
+    def get_export_config(self):
+        """获取导出配置"""
+        # 获取导出范围
+        if self.all_radio.isChecked():
+            export_type = 'all'
+            export_scope = []
+        elif self.filtered_radio.isChecked():
+            export_type = 'filtered'
+            export_scope = []
+        else:
+            export_type = 'specific'
+            export_scope = []
+            if self.transactions_check.isChecked():
+                export_scope.append('transactions')
+            if self.budgets_check.isChecked():
+                export_scope.append('budgets')
+            if self.accounts_check.isChecked():
+                export_scope.append('accounts')
+            
+            if not export_scope:
+                self.show_error("请至少选择一种数据类型")
+                return None
+        
+        # 获取导出格式
+        export_format = 'excel' if self.excel_radio.isChecked() else 'csv'
+        
+        # 获取文件路径
+        file_path = self.filename_edit.text().strip()
+        if not file_path:
+            self.show_error("请选择导出文件路径")
+            return None
+        
+        return {
+            'export_type': export_type,
+            'export_format': export_format,
+            'export_scope': export_scope,
+            'file_path': file_path,
+            'ledger_name': '日常消费'
+        }
+    
+    def on_export_finished(self, file_path, success):
+        """导出完成"""
+        self.export_btn.setEnabled(True)
+        self.progress_bar.hide()
+        
+        if success:
+            self.status_label.setText(f"✅ 导出成功: {os.path.basename(file_path)}")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #4CAF50;
+                    font-weight: bold;
+                    font-size: 12px;
+                    padding: 5px;
+                }
+            """)
+            
+            # 询问是否打开文件夹
+            reply = QMessageBox.question(
+                self, "导出完成", 
+                f"文件已成功导出到:\n{file_path}\n\n是否打开文件所在文件夹？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                import subprocess
+                import sys
+                try:
+                    folder_path = os.path.dirname(file_path)
+                    if sys.platform == "win32":
+                        os.startfile(folder_path)
+                    elif sys.platform == "darwin":
+                        subprocess.run(["open", folder_path])
+                    else:
+                        subprocess.run(["xdg-open", folder_path])
+                except:
+                    pass
+        else:
+            self.status_label.setText("❌ 导出失败")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #F44336;
+                    font-weight: bold;
+                    font-size: 12px;
+                    padding: 5px;
+                }
+            """)
+    
+    def on_export_error(self, error_message):
+        """导出错误"""
+        self.export_btn.setEnabled(True)
+        self.progress_bar.hide()
+        self.status_label.setText(f"❌ 导出失败: {error_message}")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #F44336;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 5px;
+            }
+        """)
+    
+    def select_import_file(self):
+        """选择导入文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择导入文件", 
+            "", 
+            "数据文件 (*.xlsx *.csv);;Excel文件 (*.xlsx);;CSV文件 (*.csv);;所有文件 (*)"
+        )
+        
+        if file_path:
+            self.file_path_edit.setText(file_path)
+            self.preview_import_file(file_path)
+            self.import_btn.setEnabled(True)
+    
+    def preview_import_file(self, file_path):
+        """预览导入文件"""
+        try:
+            import pandas as pd
+            
+            # 读取文件
+            if file_path.endswith('.xlsx'):
+                df = pd.read_excel(file_path, nrows=10)
+            else:
+                df = pd.read_csv(file_path, nrows=10)
+            
+            # 更新预览表格
+            self.preview_table.setColumnCount(len(df.columns))
+            self.preview_table.setRowCount(len(df))
+            self.preview_table.setHorizontalHeaderLabels(df.columns)
+            
+            for i in range(len(df)):
+                for j in range(len(df.columns)):
+                    self.preview_table.setItem(i, j, QTableWidgetItem(str(df.iloc[i, j])))
+            
+            self.preview_table.resizeColumnsToContents()
+            
+        except Exception as e:
+            self.show_error(f"文件预览失败: {str(e)}")
+    
+    def start_import(self):
+        """开始导入"""
+        try:
+            file_path = self.file_path_edit.text().strip()
+            if not file_path:
+                self.show_error("请选择导入文件")
+                return
+            
+            # 获取导入配置
+            import_config = {
+                'file_path': file_path,
+                'import_mode': 'append' if self.append_radio.isChecked() else 'overwrite',
+                'skip_errors': self.skip_errors_check.isChecked()
+            }
+            
+            # 开始导入
+            self.import_btn.setEnabled(False)
+            self.progress_bar.show()
+            self.progress_bar.setValue(0)
+            self.status_label.setText("正在导入数据...")
+            
+            self.import_worker = ImportWorker(self.db_manager, import_config)
+            self.import_worker.progress_updated.connect(self.progress_bar.setValue)
+            self.import_worker.finished.connect(self.on_import_finished)
+            self.import_worker.error_occurred.connect(self.on_import_error)
+            self.import_worker.start()
+            
+        except Exception as e:
+            self.show_error(f"导入启动失败: {str(e)}")
+    
+    def on_import_finished(self, result):
+        """导入完成"""
+        self.import_btn.setEnabled(True)
+        self.progress_bar.hide()
+        
+        success_count = result.get('success_count', 0)
+        error_count = result.get('error_count', 0)
+        
+        if error_count == 0:
+            self.status_label.setText(f"✅ 导入成功: {success_count} 条记录")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #4CAF50;
+                    font-weight: bold;
+                    font-size: 12px;
+                    padding: 5px;
+                }
+            """)
+        else:
+            self.status_label.setText(f"⚠️ 导入完成: {success_count} 成功, {error_count} 失败")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #FF9800;
+                    font-weight: bold;
+                    font-size: 12px;
+                    padding: 5px;
+                }
+            """)
+    
+    def on_import_error(self, error_message):
+        """导入错误"""
+        self.import_btn.setEnabled(True)
+        self.progress_bar.hide()
+        self.status_label.setText(f"❌ 导入失败: {error_message}")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #F44336;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 5px;
+            }
+        """)
+    
+    def show_error(self, message):
+        """显示错误信息"""
+        self.status_label.setText(f"❌ {message}")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #F44336;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 5px;
+            }
+        """)
     
     def open_export_dialog(self):
-        """打开导出对话框"""
-        dialog = ExportDialog(self.db_manager, self)
-        dialog.exec()
+        """打开导出对话框（保留兼容性）"""
+        self.tab_widget.setCurrentIndex(0)
     
     def open_import_dialog(self):
-        """打开导入对话框"""
-        dialog = ImportDialog(self.db_manager, self)
-        dialog.exec()
+        """打开导入对话框（保留兼容性）"""
+        self.tab_widget.setCurrentIndex(1)

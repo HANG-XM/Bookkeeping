@@ -2010,38 +2010,85 @@ class StatisticsWidget(QWidget):
         dialog.exec()
     
     def export_statistics(self):
-        """导出统计数据"""
+        """快速导出统计数据 - 优化版，直接导出减少弹窗"""
         if not self.current_ledger_id:
             MessageHelper.show_warning(self, "提示", "请先选择账本！")
             return
         
         try:
-            from data_import_export import ExportDialog
-            dialog = ExportDialog(self.db_manager, self)
+            from data_import_export import ExportWorker
+            from datetime import datetime
             
-            # 预设为筛选结果导出
-            dialog.filtered_radio.setChecked(True)
-            dialog.on_scope_changed()
+            # 询问导出格式
+            from PyQt6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self, "导出统计数据", 
+                "请选择导出格式：\n\n点击 'Yes' 导出为 Excel (.xlsx)\n点击 'No' 导出为 CSV",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            )
             
-            # 获取当前时间范围
+            if reply == QMessageBox.StandardButton.Cancel:
+                return
+            
+            # 确定导出格式
+            export_format = 'excel' if reply == QMessageBox.StandardButton.Yes else 'csv'
+            file_extension = '.xlsx' if export_format == 'excel' else '.csv'
+            
+            # 生成文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"统计数据-{timestamp}{file_extension}"
+            
+            # 选择保存位置
+            from PyQt6.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "保存统计数据", filename,
+                f"{export_format.upper()}文件 (*{file_extension})"
+            )
+            
+            if not file_path:
+                return
+            
+            if not file_path.endswith(file_extension):
+                file_path += file_extension
+            
+            # 获取时间范围
             start_date, end_date = self.get_date_range()
             
-            # 设置导出配置的筛选条件
-            if hasattr(dialog, 'export_config'):
-                dialog.export_config.update({
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'ledger_id': self.current_ledger_id
-                })
-            else:
-                # 如果export_config还不存在，创建它
-                dialog.export_config = {
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'ledger_id': self.current_ledger_id
-                }
+            # 构建导出配置
+            export_config = {
+                'export_type': 'filtered',
+                'export_format': export_format,
+                'export_scope': [],
+                'file_path': file_path,
+                'ledger_name': '日常消费',
+                'start_date': start_date,
+                'end_date': end_date,
+                'ledger_id': self.current_ledger_id
+            }
             
-            dialog.exec()
+            # 显示进度提示
+            from PyQt6.QtWidgets import QProgressDialog
+            progress = QProgressDialog("正在导出统计数据...", "取消", 0, 100, self)
+            progress.setWindowTitle("导出进度")
+            progress.show()
+            
+            # 开始导出
+            def update_progress(value):
+                progress.setValue(value)
+                if value >= 100:
+                    progress.close()
+            
+            def export_finished(file_path, success):
+                progress.close()
+                if success:
+                    MessageHelper.show_info(self, "导出成功", f"统计数据已导出到:\n{file_path}")
+                else:
+                    MessageHelper.show_error(self, "导出失败", "导出过程中发生错误")
+            
+            worker = ExportWorker(self.db_manager, export_config)
+            worker.progress_updated.connect(update_progress)
+            worker.finished.connect(export_finished)
+            worker.start()
             
         except Exception as e:
             MessageHelper.show_error(self, "错误", f"导出统计失败：{str(e)}")
@@ -3144,32 +3191,86 @@ class MainWindow(QMainWindow):
         self.load_transactions()
     
     def export_search_results(self):
-        """导出搜索结果"""
+        """快速导出搜索结果 - 优化版，直接导出减少弹窗"""
         if not self.current_ledger_id:
             MessageHelper.show_warning(self, "提示", "请先选择账本！")
             return
         
         try:
-            from data_import_export import ExportDialog
-            dialog = ExportDialog(self.db_manager, self)
+            from data_import_export import ExportWorker
+            from datetime import datetime
             
-            # 预设为筛选结果导出
-            dialog.filtered_radio.setChecked(True)
-            dialog.on_scope_changed()
+            # 询问导出格式
+            from PyQt6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self, "导出搜索结果", 
+                "请选择导出格式：\n\n点击 'Yes' 导出为 Excel (.xlsx)\n点击 'No' 导出为 CSV",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            )
             
-            # 获取当前搜索条件
+            if reply == QMessageBox.StandardButton.Cancel:
+                return
+            
+            # 确定导出格式
+            export_format = 'excel' if reply == QMessageBox.StandardButton.Yes else 'csv'
+            file_extension = '.xlsx' if export_format == 'excel' else '.csv'
+            
+            # 生成文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"搜索结果-{timestamp}{file_extension}"
+            
+            # 选择保存位置
+            from PyQt6.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "保存搜索结果", filename,
+                f"{export_format.upper()}文件 (*{file_extension})"
+            )
+            
+            if not file_path:
+                return
+            
+            if not file_path.endswith(file_extension):
+                file_path += file_extension
+            
+            # 获取搜索条件
             start_date = self.start_date_edit.date().toString('yyyy-MM-dd')
             end_date = self.end_date_edit.date().toString('yyyy-MM-dd')
             
             # 构建导出配置
-            if hasattr(dialog, 'export_config'):
-                dialog.export_config.update({
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'ledger_id': self.current_ledger_id
-                })
+            export_config = {
+                'export_type': 'filtered',
+                'export_format': export_format,
+                'export_scope': [],
+                'file_path': file_path,
+                'ledger_name': '日常消费',
+                'start_date': start_date,
+                'end_date': end_date,
+                'ledger_id': self.current_ledger_id
+            }
             
-            dialog.exec()
+            # 显示进度提示
+            from PyQt6.QtWidgets import QProgressDialog
+            progress = QProgressDialog("正在导出搜索结果...", "取消", 0, 100, self)
+            progress.setWindowTitle("导出进度")
+            progress.show()
+            
+            # 开始导出
+            def update_progress(value):
+                progress.setValue(value)
+                if value >= 100:
+                    progress.close()
+            
+            def export_finished(file_path, success):
+                progress.close()
+                if success:
+                    MessageHelper.show_info(self, "导出成功", f"搜索结果已导出到:\n{file_path}")
+                else:
+                    MessageHelper.show_error(self, "导出失败", "导出过程中发生错误")
+            
+            worker = ExportWorker(self.db_manager, export_config)
+            worker.progress_updated.connect(update_progress)
+            worker.finished.connect(export_finished)
+            worker.start()
             
         except Exception as e:
             MessageHelper.show_error(self, "错误", f"导出失败：{str(e)}")
