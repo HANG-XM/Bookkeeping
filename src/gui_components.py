@@ -150,6 +150,60 @@ class SystemSettingsDialog(QDialog):
         
         settings_layout.addLayout(ledger_settings_layout)
         
+        # 统计设置分隔符
+        stats_separator = QFrame()
+        stats_separator.setFrameShape(QFrame.Shape.HLine)
+        stats_separator.setStyleSheet(f"color: {theme_manager.get_color('border')};")
+        settings_layout.addWidget(stats_separator)
+        
+        # 统计设置
+        stats_settings_layout = QVBoxLayout()
+        self.auto_restore_stats_view_check = QCheckBox("启动时自动恢复上次统计视图")
+        self.auto_restore_stats_view_check.setStyleSheet(f"""
+            QCheckBox {{
+                color: {theme_manager.get_color('primary_text')};
+                background-color: transparent;
+                font-size: 14px;
+            }}
+        """)
+        
+        # 获取设置状态
+        auto_restore_stats_view = settings.value("auto_restore_stats_view", False, type=bool)
+        self.auto_restore_stats_view_check.setChecked(auto_restore_stats_view)
+        
+        # 上次统计视图信息
+        last_stats_view = settings.value("last_stats_view", "day")
+        view_names = {"day": "日视图", "week": "周视图", "month": "月视图", "year": "年视图", "custom": "自定义时间"}
+        self.last_stats_view_label = QLabel(f"上次视图: {view_names.get(last_stats_view, '日视图')}")
+        self.last_stats_view_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-size: 12px;
+                font-style: italic;
+                background-color: transparent;
+                padding: 5px 0;
+            }}
+        """)
+        
+        stats_settings_layout.addWidget(self.auto_restore_stats_view_check)
+        stats_settings_layout.addWidget(self.last_stats_view_label)
+        
+        # 统计设置说明
+        stats_info = QLabel("启用此功能后，程序启动时统计分析页面会自动恢复到上次使用的视图类型。")
+        stats_info.setWordWrap(True)
+        stats_info.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-size: 12px;
+                padding: 10px;
+                background-color: {theme_manager.get_color('secondary_background')};
+                border-radius: 4px;
+            }}
+        """)
+        stats_settings_layout.addWidget(stats_info)
+        
+        settings_layout.addLayout(stats_settings_layout)
+        
         settings_group.setLayout(settings_layout)
         layout.addWidget(settings_group)
         
@@ -180,6 +234,9 @@ class SystemSettingsDialog(QDialog):
         
         # 保存自动打开账本设置
         settings.setValue("auto_open_last_ledger", self.auto_open_check.isChecked())
+        
+        # 保存自动恢复统计视图设置
+        settings.setValue("auto_restore_stats_view", self.auto_restore_stats_view_check.isChecked())
         
         # 通知父窗口（如果需要）
         if hasattr(self.parent(), 'on_settings_changed'):

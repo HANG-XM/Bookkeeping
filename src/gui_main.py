@@ -584,6 +584,7 @@ class StatisticsWidget(QWidget):
         self.show_chinese_amount = False
         self.category_level = "parent"  # parent, subcategory
         self.setup_ui()
+        self.load_last_view()
         self.update_statistics()
     
     def setup_ui(self):
@@ -934,6 +935,9 @@ class StatisticsWidget(QWidget):
             self.prev_btn.show()
             self.next_btn.show()
         
+        # 保存当前视图
+        self.save_current_view()
+        
         # 切换视图专属内容
         self.switch_view_content()
         
@@ -1056,6 +1060,55 @@ class StatisticsWidget(QWidget):
         """类别统计层级改变"""
         self.category_level = "subcategory" if "子类别" in text else "parent"
         self.update_statistics()
+    
+    def load_last_view(self):
+        """加载上次使用的视图"""
+        from PyQt6.QtCore import QSettings
+        settings = QSettings()
+        
+        # 检查是否启用自动恢复视图
+        auto_restore = settings.value("auto_restore_stats_view", False, type=bool)
+        
+        if auto_restore:
+            last_view = settings.value("last_stats_view", "day")
+            if last_view in ["day", "week", "month", "year", "custom"]:
+                self.current_view = last_view
+                
+                # 设置视图选择器
+                view_names = {
+                    "day": "日视图",
+                    "week": "周视图", 
+                    "month": "月视图",
+                    "year": "年视图",
+                    "custom": "自定义时间"
+                }
+                
+                # 更新视图下拉框
+                index = self.view_combo.findText(view_names[self.current_view])
+                if index >= 0:
+                    self.view_combo.setCurrentIndex(index)
+                
+                # 显示/隐藏相应的控件
+                if self.current_view == "custom":
+                    self.custom_date_widget.show()
+                    self.prev_btn.hide()
+                    self.next_btn.hide()
+                else:
+                    self.custom_date_widget.hide()
+                    self.prev_btn.show()
+                    self.next_btn.show()
+                
+                # 切换视图专属内容
+                self.switch_view_content()
+                
+                # 更新日期显示
+                self.update_date_display()
+    
+    def save_current_view(self):
+        """保存当前视图"""
+        from PyQt6.QtCore import QSettings
+        settings = QSettings()
+        settings.setValue("last_stats_view", self.current_view)
     
     def create_summary_card(self, title, color, bg_color):
         """创建汇总卡片"""
