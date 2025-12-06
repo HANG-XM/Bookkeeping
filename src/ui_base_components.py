@@ -165,7 +165,7 @@ class BaseTransactionDialog(QDialog):
         
         # 按主类别分组
         self.subcategories = {}
-        for parent, sub in categories:
+        for parent, sub, cat_type in categories:
             if parent not in self.subcategories:
                 self.subcategories[parent] = []
             self.subcategories[parent].append(sub)

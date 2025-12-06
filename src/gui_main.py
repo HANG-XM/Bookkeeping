@@ -171,6 +171,393 @@ class EditTransferDialog(QDialog):
         self.setup_ui()
         self.load_accounts()
         self.load_transfer_data()
+
+
+class BudgetManagementDialog(QDialog):
+    """预算管理对话框"""
+    
+    def __init__(self, db_manager, ledger_id, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.ledger_id = ledger_id
+        self.setWindowTitle("预算管理")
+        self.setModal(True)
+        self.setFixedSize(900, 700)
+        self.setup_ui()
+        self.load_budgets()
+        self.load_categories()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 标题
+        title_label = QLabel("预算管理")
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        StyleHelper.apply_label_style(title_label)
+        layout.addWidget(title_label)
+        
+        # 工具栏
+        toolbar_layout = QHBoxLayout()
+        
+        add_budget_btn = QPushButton("➕ 添加预算")
+        add_budget_btn.clicked.connect(self.add_budget)
+        StyleHelper.apply_button_style(add_budget_btn)
+        toolbar_layout.addWidget(add_budget_btn)
+        
+        copy_monthly_btn = QPushButton("📋 复制月度预算")
+        copy_monthly_btn.clicked.connect(self.copy_monthly_budgets)
+        StyleHelper.apply_button_style(copy_monthly_btn)
+        toolbar_layout.addWidget(copy_monthly_btn)
+        
+        copy_yearly_btn = QPushButton("📋 复制年度预算")
+        copy_yearly_btn.clicked.connect(self.copy_yearly_budgets)
+        StyleHelper.apply_button_style(copy_yearly_btn)
+        toolbar_layout.addWidget(copy_yearly_btn)
+        
+        refresh_btn = QPushButton("🔄 刷新")
+        refresh_btn.clicked.connect(self.refresh_budgets)
+        StyleHelper.apply_button_style(refresh_btn)
+        toolbar_layout.addWidget(refresh_btn)
+        
+        toolbar_layout.addStretch()
+        layout.addLayout(toolbar_layout)
+        
+        # 预算表格
+        self.budget_table = QTableWidget()
+        self.budget_table.setColumnCount(8)
+        self.budget_table.setHorizontalHeaderLabels([
+            "类别", "预算类型", "预算金额", "预警阈值", "已使用", "剩余", "进度", "操作"
+        ])
+        self.budget_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.budget_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.budget_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        self.budget_table.horizontalHeader().resizeSection(7, 150)
+        layout.addWidget(self.budget_table)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        close_btn = QPushButton("关闭")
+        close_btn.clicked.connect(self.accept)
+        StyleHelper.apply_button_style(close_btn)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def load_categories(self):
+        """加载支出类别"""
+        categories = self.db_manager.get_categories()
+        self.expense_categories = []
+        for category in categories:
+            if category[2] == '支出':  # type == '支出'
+                self.expense_categories.append(category[0])
+    
+    def load_budgets(self):
+        """加载预算数据"""
+        budgets = self.db_manager.get_budgets(self.ledger_id)
+        self.budget_table.setRowCount(len(budgets))
+        
+        for row, budget in enumerate(budgets):
+            # 获取预算进度
+            progress = self.db_manager.get_budget_progress(
+                self.ledger_id, budget['category'], budget['budget_type']
+            )
+            
+            # 类别
+            self.budget_table.setItem(row, 0, QTableWidgetItem(budget['category']))
+            
+            # 预算类型
+            type_text = "月度" if budget['budget_type'] == 'monthly' else "年度"
+            self.budget_table.setItem(row, 1, QTableWidgetItem(type_text))
+            
+            # 预算金额
+            amount_item = QTableWidgetItem(f"¥{budget['amount']:.2f}")
+            self.budget_table.setItem(row, 2, amount_item)
+            
+            # 预警阈值
+            threshold_item = QTableWidgetItem(f"{budget['warning_threshold']:.0f}%")
+            self.budget_table.setItem(row, 3, threshold_item)
+            
+            if progress:
+                # 已使用
+                spent_item = QTableWidgetItem(f"¥{progress['spent_amount']:.2f}")
+                self.budget_table.setItem(row, 4, spent_item)
+                
+                # 剩余
+                remaining_item = QTableWidgetItem(f"¥{progress['remaining_amount']:.2f}")
+                self.budget_table.setItem(row, 5, remaining_item)
+                
+                # 进度
+                progress_text = f"{progress['progress_percent']:.1f}%"
+                progress_item = QTableWidgetItem(progress_text)
+                if progress['is_over_budget']:
+                    progress_item.setStyleSheet("background-color: #ffebee; color: #c62828; font-weight: bold;")
+                elif progress['is_warning']:
+                    progress_item.setStyleSheet("background-color: #fff8e1; color: #f57c00; font-weight: bold;")
+                self.budget_table.setItem(row, 6, progress_item)
+            else:
+                self.budget_table.setItem(row, 4, QTableWidgetItem("¥0.00"))
+                self.budget_table.setItem(row, 5, QTableWidgetItem(f"¥{budget['amount']:.2f}"))
+                self.budget_table.setItem(row, 6, QTableWidgetItem("0.0%"))
+            
+            # 操作按钮
+            widget = QWidget()
+            button_layout = QHBoxLayout()
+            button_layout.setContentsMargins(2, 2, 2, 2)
+            
+            edit_btn = QPushButton("编辑")
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+            """)
+            edit_btn.clicked.connect(lambda checked, b=budget: self.edit_budget(b))
+            
+            delete_btn = QPushButton("删除")
+            delete_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #F44336;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #D32F2F;
+                }
+            """)
+            delete_btn.clicked.connect(lambda checked, b=budget: self.delete_budget(b))
+            
+            toggle_btn = QPushButton("暂停" if budget['is_active'] else "启用")
+            toggle_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #FF9800;
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 4px 8px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #F57C00;
+                }
+            """)
+            toggle_btn.clicked.connect(lambda checked, b=budget: self.toggle_budget(b))
+            
+            button_layout.addWidget(edit_btn)
+            button_layout.addWidget(delete_btn)
+            button_layout.addWidget(toggle_btn)
+            widget.setLayout(button_layout)
+            self.budget_table.setCellWidget(row, 7, widget)
+    
+    def add_budget(self):
+        """添加预算"""
+        dialog = AddBudgetDialog(self.expense_categories, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            self.db_manager.add_budget(
+                self.ledger_id, data['category'], data['budget_type'],
+                data['amount'], data['warning_threshold'], data['start_date'], data['end_date']
+            )
+            self.load_budgets()
+            MessageHelper.show_info(self, "成功", "预算添加成功！")
+    
+    def edit_budget(self, budget):
+        """编辑预算"""
+        dialog = EditBudgetDialog(budget, self.expense_categories, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            self.db_manager.update_budget(
+                budget['id'], data.get('amount'), data.get('warning_threshold'),
+                data.get('start_date'), data.get('end_date'), data.get('is_active')
+            )
+            self.load_budgets()
+            MessageHelper.show_info(self, "成功", "预算更新成功！")
+    
+    def delete_budget(self, budget):
+        """删除预算"""
+        reply = QMessageBox.question(
+            self, "确认删除", f"确定要删除 {budget['category']} 的{budget['budget_type']}预算吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.db_manager.delete_budget(budget['id'])
+            self.load_budgets()
+            MessageHelper.show_info(self, "成功", "预算删除成功！")
+    
+    def toggle_budget(self, budget):
+        """切换预算启用状态"""
+        new_status = not budget['is_active']
+        self.db_manager.update_budget(budget['id'], is_active=new_status)
+        self.load_budgets()
+        status_text = "启用" if new_status else "暂停"
+        MessageHelper.show_info(self, "成功", f"预算已{status_text}！")
+    
+    def copy_monthly_budgets(self):
+        """复制月度预算到下月"""
+        # 这里简化实现，实际应该弹出对话框选择目标月份
+        MessageHelper.show_info(self, "提示", "月度预算复制功能开发中...")
+    
+    def copy_yearly_budgets(self):
+        """复制年度预算到下年"""
+        MessageHelper.show_info(self, "提示", "年度预算复制功能开发中...")
+    
+    def refresh_budgets(self):
+        """刷新预算数据"""
+        self.load_budgets()
+
+
+class AddBudgetDialog(QDialog):
+    """添加预算对话框"""
+    
+    def __init__(self, categories, parent=None):
+        super().__init__(parent)
+        self.categories = categories
+        self.setWindowTitle("添加预算")
+        self.setModal(True)
+        self.setFixedSize(400, 350)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+        
+        # 类别选择
+        self.category_combo = QComboBox()
+        self.category_combo.addItems(self.categories)
+        category_label = QLabel("支出类别:")
+        StyleHelper.apply_label_style(category_label)
+        form_layout.addRow(category_label, self.category_combo)
+        
+        # 预算类型
+        self.budget_type_combo = QComboBox()
+        self.budget_type_combo.addItems(["月度预算", "年度预算"])
+        self.budget_type_combo.currentTextChanged.connect(self.on_budget_type_changed)
+        budget_type_label = QLabel("预算类型:")
+        StyleHelper.apply_label_style(budget_type_label)
+        form_layout.addRow(budget_type_label, self.budget_type_combo)
+        
+        # 预算金额
+        self.amount_spin = QDoubleSpinBox()
+        self.amount_spin.setRange(0, 999999.99)
+        self.amount_spin.setDecimals(2)
+        self.amount_spin.setPrefix("¥")
+        self.amount_spin.setSuffix("元")
+        amount_label = QLabel("预算金额:")
+        StyleHelper.apply_label_style(amount_label)
+        form_layout.addRow(amount_label, self.amount_spin)
+        
+        # 预警阈值
+        self.threshold_spin = QDoubleSpinBox()
+        self.threshold_spin.setRange(0, 100)
+        self.threshold_spin.setDecimals(0)
+        self.threshold_spin.setSuffix("%")
+        self.threshold_spin.setValue(80)
+        threshold_label = QLabel("预警阈值:")
+        StyleHelper.apply_label_style(threshold_label)
+        form_layout.addRow(threshold_label, self.threshold_spin)
+        
+        # 生效日期
+        self.start_date_edit = QDateEdit()
+        self.start_date_edit.setDate(QDate.currentDate())
+        self.start_date_edit.setCalendarPopup(True)
+        start_date_label = QLabel("生效日期:")
+        StyleHelper.apply_label_style(start_date_label)
+        form_layout.addRow(start_date_label, self.start_date_edit)
+        
+        # 结束日期（可选）
+        self.end_date_edit = QDateEdit()
+        self.end_date_edit.setDate(QDate.currentDate().addYears(1))
+        self.end_date_edit.setCalendarPopup(True)
+        self.end_date_check = QCheckBox("设置结束日期")
+        self.end_date_check.toggled.connect(self.end_date_edit.setEnabled)
+        self.end_date_edit.setEnabled(False)
+        end_date_label = QLabel("结束日期:")
+        StyleHelper.apply_label_style(end_date_label)
+        form_layout.addRow(end_date_label, self.end_date_check)
+        form_layout.addRow("", self.end_date_edit)
+        
+        layout.addLayout(form_layout)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        ok_btn = QPushButton("确定")
+        ok_btn.clicked.connect(self.accept)
+        StyleHelper.apply_button_style(ok_btn)
+        button_layout.addWidget(ok_btn)
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(self.reject)
+        StyleHelper.apply_button_style(cancel_btn)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+        
+        # 初始化日期
+        self.on_budget_type_changed()
+    
+    def on_budget_type_changed(self):
+        """预算类型改变时的处理"""
+        budget_type = self.budget_type_combo.currentText()
+        current_date = QDate.currentDate()
+        
+        if "月度" in budget_type:
+            self.start_date_edit.setDate(QDate(current_date.year(), current_date.month(), 1))
+        else:  # 年度
+            self.start_date_edit.setDate(QDate(current_date.year(), 1, 1))
+    
+    def get_data(self):
+        """获取对话框数据"""
+        budget_type = 'monthly' if self.budget_type_combo.currentText() == "月度预算" else 'yearly'
+        
+        return {
+            'category': self.category_combo.currentText(),
+            'budget_type': budget_type,
+            'amount': self.amount_spin.value(),
+            'warning_threshold': self.threshold_spin.value(),
+            'start_date': self.start_date_edit.date().toString("yyyy-MM-dd"),
+            'end_date': self.end_date_edit.date().toString("yyyy-MM-dd") if self.end_date_check.isChecked() else None
+        }
+
+
+class EditBudgetDialog(AddBudgetDialog):
+    """编辑预算对话框"""
+    
+    def __init__(self, budget_data, categories, parent=None):
+        self.budget_data = budget_data
+        super().__init__(categories, parent)
+        self.setWindowTitle("编辑预算")
+        self.load_budget_data()
+    
+    def load_budget_data(self):
+        """加载预算数据"""
+        self.category_combo.setCurrentText(self.budget_data['category'])
+        budget_type_text = "月度预算" if self.budget_data['budget_type'] == 'monthly' else "年度预算"
+        self.budget_type_combo.setCurrentText(budget_type_text)
+        self.amount_spin.setValue(self.budget_data['amount'])
+        self.threshold_spin.setValue(self.budget_data['warning_threshold'])
+        
+        if self.budget_data['start_date']:
+            self.start_date_edit.setDate(QDate.fromString(self.budget_data['start_date'], "yyyy-MM-dd"))
+        
+        if self.budget_data['end_date']:
+            self.end_date_check.setChecked(True)
+            self.end_date_edit.setDate(QDate.fromString(self.budget_data['end_date'], "yyyy-MM-dd"))
     
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -901,6 +1288,37 @@ class StatisticsWidget(QWidget):
         core_stats_layout.addWidget(settlement_group)
         core_stats_layout.addWidget(refund_group)
         
+        # 预算执行统计
+        budget_group = QGroupBox("预算执行统计")
+        budget_form_layout = QFormLayout()
+        self.budget_total_label = QLabel("¥0.00")
+        StyleHelper.apply_label_style(self.budget_total_label)
+        self.budget_used_label = QLabel("¥0.00")
+        StyleHelper.apply_label_style(self.budget_used_label)
+        self.budget_remaining_label = QLabel("¥0.00")
+        StyleHelper.apply_label_style(self.budget_remaining_label)
+        self.budget_warning_count_label = QLabel("0")
+        StyleHelper.apply_label_style(self.budget_warning_count_label)
+        
+        budget_total_text_label = QLabel("总预算:")
+        StyleHelper.apply_label_style(budget_total_text_label)
+        budget_form_layout.addRow(budget_total_text_label, self.budget_total_label)
+        
+        budget_used_text_label = QLabel("已使用:")
+        StyleHelper.apply_label_style(budget_used_text_label)
+        budget_form_layout.addRow(budget_used_text_label, self.budget_used_label)
+        
+        budget_remaining_text_label = QLabel("剩余:")
+        StyleHelper.apply_label_style(budget_remaining_text_label)
+        budget_form_layout.addRow(budget_remaining_text_label, self.budget_remaining_label)
+        
+        budget_warning_text_label = QLabel("预警数量:")
+        StyleHelper.apply_label_style(budget_warning_text_label)
+        budget_form_layout.addRow(budget_warning_text_label, self.budget_warning_count_label)
+        
+        budget_group.setLayout(budget_form_layout)
+        core_stats_layout.addWidget(budget_group)
+        
         stats_layout.addLayout(core_stats_layout)
         stats_content.setLayout(stats_layout)
         
@@ -1242,6 +1660,9 @@ class StatisticsWidget(QWidget):
             self.refund_amount_label.setText(f"¥{refund_stats['total_refund']:.2f}")
             self.refund_count_label.setText(str(refund_stats['refund_count']))
             self.refund_ratio_label.setText(f"{refund_stats['refund_ratio']:.1f}%")
+            
+            # 更新预算统计
+            self.update_budget_statistics(start_date, end_date)
         
         finally:
             # 重新启用UI更新
@@ -1250,6 +1671,34 @@ class StatisticsWidget(QWidget):
         
         # 更新视图专属内容
         self.update_view_specific_content()
+    
+    def update_budget_statistics(self, start_date, end_date):
+        """更新预算统计"""
+        # 获取当前账本ID（需要从父窗口获取）
+        parent = self.parent()
+        if parent and hasattr(parent, 'current_ledger_id') and parent.current_ledger_id:
+            ledger_id = parent.current_ledger_id
+            
+            # 获取所有预算进度
+            progress_list = self.db_manager.get_all_budget_progress(ledger_id)
+            
+            # 计算总计数据
+            total_budget = sum(p['budget_amount'] for p in progress_list)
+            total_used = sum(p['spent_amount'] for p in progress_list)
+            total_remaining = total_budget - total_used
+            warning_count = sum(1 for p in progress_list if p['is_warning'])
+            
+            # 更新显示
+            self.budget_total_label.setText(f"¥{total_budget:.2f}")
+            self.budget_used_label.setText(f"¥{total_used:.2f}")
+            self.budget_remaining_label.setText(f"¥{total_remaining:.2f}")
+            self.budget_warning_count_label.setText(str(warning_count))
+        else:
+            # 没有选择账本时显示默认值
+            self.budget_total_label.setText("¥0.00")
+            self.budget_used_label.setText("¥0.00")
+            self.budget_remaining_label.setText("¥0.00")
+            self.budget_warning_count_label.setText("0")
     
     def update_view_specific_content(self):
         """更新视图专属的统计内容"""
@@ -1405,6 +1854,304 @@ class StatisticsWidget(QWidget):
         
         dialog.setLayout(layout)
         dialog.exec()
+
+
+class BudgetManagementWidget(QWidget):
+    """预算管理组件"""
+    
+    def __init__(self, db_manager):
+        super().__init__()
+        self.db_manager = db_manager
+        self.current_ledger_id = None
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 提示信息
+        info_label = QLabel("请先选择一个账本来管理预算")
+        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-size: 16px;
+                padding: 40px;
+                background-color: {theme_manager.get_color('secondary_background')};
+                border: 2px dashed {theme_manager.get_color('border')};
+                border-radius: 8px;
+            }}
+        """)
+        self.info_label = info_label
+        layout.addWidget(info_label)
+        
+        # 预算管理区域（初始隐藏）
+        self.budget_content = QWidget()
+        budget_layout = QVBoxLayout(self.budget_content)
+        
+        # 工具栏
+        toolbar_layout = QHBoxLayout()
+        
+        self.add_budget_btn = QPushButton("➕ 添加预算")
+        self.add_budget_btn.clicked.connect(self.add_budget)
+        StyleHelper.apply_button_style(self.add_budget_btn)
+        toolbar_layout.addWidget(self.add_budget_btn)
+        
+        self.manage_budget_btn = QPushButton("📊 预算管理")
+        self.manage_budget_btn.clicked.connect(self.manage_budgets)
+        StyleHelper.apply_button_style(self.manage_budget_btn)
+        toolbar_layout.addWidget(self.manage_budget_btn)
+        
+        self.refresh_btn = QPushButton("🔄 刷新")
+        self.refresh_btn.clicked.connect(self.refresh_budgets)
+        StyleHelper.apply_button_style(self.refresh_btn)
+        toolbar_layout.addWidget(self.refresh_btn)
+        
+        toolbar_layout.addStretch()
+        budget_layout.addLayout(toolbar_layout)
+        
+        # 预算概览卡片
+        overview_layout = QHBoxLayout()
+        
+        # 总预算卡片
+        self.total_budget_card = self.create_overview_card("总预算", "#4CAF50", "#E8F5E8")
+        overview_layout.addWidget(self.total_budget_card)
+        
+        # 已使用卡片
+        self.used_budget_card = self.create_overview_card("已使用", "#FF9800", "#FFF3E0")
+        overview_layout.addWidget(self.used_budget_card)
+        
+        # 剩余额度卡片
+        self.remaining_budget_card = self.create_overview_card("剩余额度", "#2196F3", "#E3F2FD")
+        overview_layout.addWidget(self.remaining_budget_card)
+        
+        budget_layout.addLayout(overview_layout)
+        
+        # 预算进度表格
+        progress_label = QLabel("预算执行进度")
+        progress_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        budget_layout.addWidget(progress_label)
+        
+        self.progress_table = QTableWidget()
+        self.progress_table.setColumnCount(6)
+        self.progress_table.setHorizontalHeaderLabels([
+            "类别", "预算类型", "预算金额", "已使用", "使用率", "状态"
+        ])
+        self.progress_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.progress_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.progress_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.progress_table.horizontalHeader().resizeSection(5, 100)
+        budget_layout.addWidget(self.progress_table)
+        
+        # 预算警告信息
+        self.warning_label = QLabel("")
+        self.warning_label.setStyleSheet(f"""
+            QLabel {{
+                background-color: #FFF3E0;
+                border: 1px solid #FF9800;
+                border-radius: 4px;
+                padding: 8px;
+                font-weight: bold;
+                color: #F57C00;
+                margin-top: 10px;
+            }}
+        """)
+        budget_layout.addWidget(self.warning_label)
+        
+        layout.addWidget(self.budget_content)
+        self.budget_content.hide()
+        
+        self.setLayout(layout)
+    
+    def create_overview_card(self, title, color, bg_color):
+        """创建概览卡片"""
+        card = QGroupBox(title)
+        card.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {bg_color};
+                border: 2px solid {color};
+                border-radius: 8px;
+                padding: 15px;
+                font-weight: bold;
+                font-size: 14px;
+            }}
+        """)
+        card.setFixedWidth(200)
+        card.setFixedHeight(100)
+        
+        layout = QVBoxLayout()
+        
+        # 金额
+        amount_label = QLabel("¥0.00")
+        amount_label.setObjectName("overview_amount")
+        amount_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                font-size: 20px;
+                font-weight: bold;
+                background-color: transparent;
+            }}
+        """)
+        amount_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(amount_label)
+        
+        card.setLayout(layout)
+        return card
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本"""
+        self.current_ledger_id = ledger_id
+        if ledger_id:
+            self.info_label.hide()
+            self.budget_content.show()
+            self.refresh_budgets()
+        else:
+            self.info_label.show()
+            self.budget_content.hide()
+    
+    def add_budget(self):
+        """添加预算"""
+        if not self.current_ledger_id:
+            MessageHelper.show_warning(self, "提示", "请先选择一个账本")
+            return
+        
+        # 获取支出类别
+        categories = self.db_manager.get_categories()
+        expense_categories = []
+        for category in categories:
+            if category[2] == '支出':  # type == '支出'
+                expense_categories.append(category[0])
+        
+        dialog = AddBudgetDialog(expense_categories, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
+            self.db_manager.add_budget(
+                self.current_ledger_id, data['category'], data['budget_type'],
+                data['amount'], data['warning_threshold'], data['start_date'], data['end_date']
+            )
+            self.refresh_budgets()
+            MessageHelper.show_info(self, "成功", "预算添加成功！")
+    
+    def manage_budgets(self):
+        """管理预算"""
+        if not self.current_ledger_id:
+            MessageHelper.show_warning(self, "提示", "请先选择一个账本")
+            return
+        
+        dialog = BudgetManagementDialog(self.db_manager, self.current_ledger_id, self)
+        dialog.exec()
+        self.refresh_budgets()
+    
+    def refresh_budgets(self):
+        """刷新预算数据"""
+        if not self.current_ledger_id:
+            return
+        
+        # 获取所有预算进度
+        progress_list = self.db_manager.get_all_budget_progress(self.current_ledger_id)
+        
+        # 更新概览卡片
+        total_budget = sum(p['budget_amount'] for p in progress_list)
+        total_used = sum(p['spent_amount'] for p in progress_list)
+        total_remaining = total_budget - total_used
+        
+        for card in [self.total_budget_card, self.used_budget_card, self.remaining_budget_card]:
+            amount_label = card.findChild(QLabel, "overview_amount")
+            if amount_label:
+                if card == self.total_budget_card:
+                    amount_label.setText(f"¥{total_budget:.2f}")
+                elif card == self.used_budget_card:
+                    amount_label.setText(f"¥{total_used:.2f}")
+                else:  # remaining
+                    amount_label.setText(f"¥{total_remaining:.2f}")
+        
+        # 更新进度表格
+        self.progress_table.setRowCount(len(progress_list))
+        
+        warning_count = 0
+        over_budget_count = 0
+        
+        for row, progress in enumerate(progress_list):
+            # 类别
+            self.progress_table.setItem(row, 0, QTableWidgetItem(progress['category']))
+            
+            # 预算类型
+            type_text = "月度" if progress['budget_type'] == 'monthly' else "年度"
+            self.progress_table.setItem(row, 1, QTableWidgetItem(type_text))
+            
+            # 预算金额
+            budget_item = QTableWidgetItem(f"¥{progress['budget_amount']:.2f}")
+            self.progress_table.setItem(row, 2, budget_item)
+            
+            # 已使用
+            used_item = QTableWidgetItem(f"¥{progress['spent_amount']:.2f}")
+            self.progress_table.setItem(row, 3, used_item)
+            
+            # 使用率
+            usage_rate = f"{progress['progress_percent']:.1f}%"
+            usage_item = QTableWidgetItem(usage_rate)
+            if progress['is_over_budget']:
+                usage_item.setStyleSheet("background-color: #ffebee; color: #c62828; font-weight: bold;")
+                over_budget_count += 1
+            elif progress['is_warning']:
+                usage_item.setStyleSheet("background-color: #fff8e1; color: #f57c00; font-weight: bold;")
+                warning_count += 1
+            self.progress_table.setItem(row, 4, usage_item)
+            
+            # 状态
+            if progress['is_over_budget']:
+                status_text = "超预算"
+                status_color = "#c62828"
+            elif progress['is_warning']:
+                status_text = "预警"
+                status_color = "#f57c00"
+            else:
+                status_text = "正常"
+                status_color = "#4CAF50"
+            
+            status_item = QTableWidgetItem(status_text)
+            status_item.setStyleSheet(f"background-color: {status_color}20; color: {status_color}; font-weight: bold;")
+            self.progress_table.setItem(row, 5, status_item)
+        
+        # 更新警告信息
+        if over_budget_count > 0:
+            self.warning_label.setText(f"⚠️ 警告：有 {over_budget_count} 个类别已超预算，请及时控制支出！")
+            self.warning_label.setStyleSheet(f"""
+                QLabel {{
+                    background-color: #ffebee;
+                    border: 1px solid #c62828;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: bold;
+                    color: #c62828;
+                    margin-top: 10px;
+                }}
+            """)
+        elif warning_count > 0:
+            self.warning_label.setText(f"🔔 提醒：有 {warning_count} 个类别接近预算上限，请注意控制支出！")
+            self.warning_label.setStyleSheet(f"""
+                QLabel {{
+                    background-color: #fff8e1;
+                    border: 1px solid #f57c00;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: bold;
+                    color: #f57c00;
+                    margin-top: 10px;
+                }}
+            """)
+        else:
+            self.warning_label.setText("✅ 所有预算控制良好，继续保持！")
+            self.warning_label.setStyleSheet(f"""
+                QLabel {{
+                    background-color: #e8f5e8;
+                    border: 1px solid #4CAF50;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-weight: bold;
+                    color: #4CAF50;
+                    margin-top: 10px;
+                }}
+            """)
 
 
 class MainWindow(QMainWindow):
@@ -1892,6 +2639,10 @@ class MainWindow(QMainWindow):
         self.statistics_widget = StatisticsWidget(self.db_manager)
         tab_widget.addTab(self.statistics_widget, "统计分析")
         
+        # 预算管理标签页
+        self.budget_widget = BudgetManagementWidget(self.db_manager)
+        tab_widget.addTab(self.budget_widget, "预算管理")
+        
         return tab_widget
     
     def load_ledgers(self):
@@ -1920,6 +2671,9 @@ class MainWindow(QMainWindow):
             self.current_ledger_id = ledger_id
             self.initialize_search_controls()
             self.load_transactions()
+            
+            # 更新预算管理组件
+            self.budget_widget.set_current_ledger(ledger_id)
             
             # 保存当前账本信息
             self.save_current_ledger()
@@ -1957,7 +2711,7 @@ class MainWindow(QMainWindow):
         # 加载类别选项
         categories = self.db_manager.get_categories()
         category_set = set()
-        for parent, sub in categories:
+        for parent, sub, cat_type in categories:
             category_set.add(parent)
         
         self.category_combo.clear()
@@ -1979,7 +2733,7 @@ class MainWindow(QMainWindow):
         if category:
             categories = self.db_manager.get_categories()
             subcategories = set()
-            for parent, sub in categories:
+            for parent, sub, cat_type in categories:
                 if parent == category:
                     subcategories.add(sub)
             self.subcategory_combo.addItems(sorted(subcategories))

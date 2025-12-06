@@ -116,6 +116,25 @@ class DatabaseManager:
                 )
             ''')
             
+            # 创建预算表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS budgets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ledger_id INTEGER NOT NULL,
+                    category TEXT NOT NULL,
+                    budget_type TEXT NOT NULL,  -- 'monthly' or 'yearly'
+                    amount REAL NOT NULL,
+                    warning_threshold REAL DEFAULT 80.0,  -- 预警阈值百分比
+                    start_date TEXT NOT NULL,  -- 生效开始日期
+                    end_date TEXT,  -- 生效结束日期，为空表示持续有效
+                    is_active BOOLEAN DEFAULT TRUE,  -- 是否启用
+                    created_time TEXT NOT NULL,
+                    updated_time TEXT NOT NULL,
+                    FOREIGN KEY (ledger_id) REFERENCES ledgers (id),
+                    UNIQUE(ledger_id, category, budget_type)
+                )
+            ''')
+            
             # 创建索引以提高查询性能
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_ledger ON transactions(ledger_id)')
@@ -123,6 +142,10 @@ class DatabaseManager:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_transfers_date ON transfers(transfer_date)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_accounts_name ON accounts(name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_budgets_ledger ON budgets(ledger_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_budgets_type ON budgets(budget_type)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_budgets_active ON budgets(is_active)')
             
             # 插入默认类别数据
             self.insert_default_categories()
@@ -218,12 +241,12 @@ class DatabaseManager:
             cursor = conn.cursor()
             if category_type:
                 cursor.execute('''
-                    SELECT DISTINCT parent_category, sub_category FROM categories 
+                    SELECT DISTINCT parent_category, sub_category, type FROM categories 
                     WHERE type = ? ORDER BY parent_category, sub_category
                 ''', (category_type,))
             else:
                 cursor.execute('''
-                    SELECT DISTINCT parent_category, sub_category FROM categories 
+                    SELECT DISTINCT parent_category, sub_category, type FROM categories 
                     ORDER BY parent_category, sub_category
                 ''')
             categories = cursor.fetchall()
@@ -719,3 +742,181 @@ class DatabaseManager:
                 'total_count': 0,
                 'refund_ratio': 0.0
             }
+    
+    def add_budget(self, ledger_id, category, budget_type, amount, warning_threshold=80.0, start_date=None, end_date=None):
+        """添加预算设置"""
+        if start_date is None:
+            if budget_type == 'monthly':
+                start_date = datetime.now().strftime('%Y-%m-01')
+            else:  # yearly
+                start_date = datetime.now().strftime('%Y-01-01')
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO budgets 
+                (ledger_id, category, budget_type, amount, warning_threshold, start_date, end_date, is_active, created_time, updated_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            ''', (ledger_id, category, budget_type, amount, warning_threshold, start_date, end_date, now, now))
+            conn.commit()
+    
+    def get_budgets(self, ledger_id):
+        """获取账本的所有预算设置"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, category, budget_type, amount, warning_threshold, 
+                       start_date, end_date, is_active, created_time, updated_time
+                FROM budgets 
+                WHERE ledger_id = ? AND is_active = 1
+                ORDER BY category, budget_type
+            ''', (ledger_id,))
+            
+            budgets = []
+            for row in cursor.fetchall():
+                budgets.append({
+                    'id': row[0],
+                    'category': row[1],
+                    'budget_type': row[2],
+                    'amount': row[3],
+                    'warning_threshold': row[4],
+                    'start_date': row[5],
+                    'end_date': row[6],
+                    'is_active': bool(row[7]),
+                    'created_time': row[8],
+                    'updated_time': row[9]
+                })
+            
+            return budgets
+    
+    def get_budget_progress(self, ledger_id, category, budget_type, current_date=None):
+        """获取预算执行进度"""
+        if current_date is None:
+            current_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # 获取预算设置
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT amount, warning_threshold, start_date, end_date 
+                FROM budgets 
+                WHERE ledger_id = ? AND category = ? AND budget_type = ? AND is_active = 1
+            ''', (ledger_id, category, budget_type))
+            
+            budget_row = cursor.fetchone()
+            if not budget_row:
+                return None
+            
+            budget_amount, warning_threshold, start_date, end_date = budget_row
+            
+            # 计算统计日期范围
+            if budget_type == 'monthly':
+                year = int(current_date[:4])
+                month = int(current_date[5:7])
+                stat_start = f"{year}-{month:02d}-01"
+                if month == 12:
+                    stat_end = f"{year+1}-01-01"
+                else:
+                    stat_end = f"{year}-{month+1:02d}-01"
+            else:  # yearly
+                year = int(current_date[:4])
+                stat_start = f"{year}-01-01"
+                stat_end = f"{year+1}-01-01"
+            
+            # 获取实际支出
+            cursor.execute('''
+                SELECT COALESCE(SUM(ABS(amount)), 0) as spent
+                FROM transactions 
+                WHERE ledger_id = ? AND category = ? AND transaction_type = '支出'
+                AND transaction_date >= ? AND transaction_date < ?
+            ''', (ledger_id, category, stat_start, stat_end))
+            
+            spent_amount = cursor.fetchone()[0]
+            
+            # 计算进度
+            progress_percent = (spent_amount / budget_amount * 100) if budget_amount > 0 else 0
+            remaining_amount = budget_amount - spent_amount
+            is_warning = progress_percent >= warning_threshold
+            is_over_budget = progress_percent >= 100
+            
+            return {
+                'budget_amount': budget_amount,
+                'spent_amount': spent_amount,
+                'remaining_amount': remaining_amount,
+                'progress_percent': progress_percent,
+                'warning_threshold': warning_threshold,
+                'is_warning': is_warning,
+                'is_over_budget': is_over_budget,
+                'start_date': start_date,
+                'end_date': end_date
+            }
+    
+    def get_all_budget_progress(self, ledger_id, current_date=None):
+        """获取所有预算的执行进度"""
+        budgets = self.get_budgets(ledger_id)
+        progress_list = []
+        
+        for budget in budgets:
+            progress = self.get_budget_progress(ledger_id, budget['category'], budget['budget_type'], current_date)
+            if progress:
+                progress.update({
+                    'category': budget['category'],
+                    'budget_type': budget['budget_type']
+                })
+                progress_list.append(progress)
+        
+        return progress_list
+    
+    def update_budget(self, budget_id, amount=None, warning_threshold=None, start_date=None, end_date=None, is_active=None):
+        """更新预算设置"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            updates = []
+            params = []
+            
+            if amount is not None:
+                updates.append('amount = ?')
+                params.append(amount)
+            if warning_threshold is not None:
+                updates.append('warning_threshold = ?')
+                params.append(warning_threshold)
+            if start_date is not None:
+                updates.append('start_date = ?')
+                params.append(start_date)
+            if end_date is not None:
+                updates.append('end_date = ?')
+                params.append(end_date)
+            if is_active is not None:
+                updates.append('is_active = ?')
+                params.append(is_active)
+            
+            if updates:
+                updates.append('updated_time = ?')
+                params.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                params.append(budget_id)
+                
+                query = f"UPDATE budgets SET {', '.join(updates)} WHERE id = ?"
+                cursor.execute(query, params)
+                conn.commit()
+    
+    def delete_budget(self, budget_id):
+        """删除预算设置"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM budgets WHERE id = ?', (budget_id,))
+            conn.commit()
+    
+    def copy_budgets(self, from_ledger_id, to_ledger_id, budget_type='monthly'):
+        """复制预算设置到其他账本"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO budgets 
+                (ledger_id, category, budget_type, amount, warning_threshold, start_date, end_date, is_active, created_time, updated_time)
+                SELECT ?, category, budget_type, amount, warning_threshold, start_date, end_date, is_active, ?, ?
+                FROM budgets 
+                WHERE ledger_id = ? AND budget_type = ? AND is_active = 1
+            ''', (to_ledger_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'), from_ledger_id, budget_type))
+            conn.commit()
