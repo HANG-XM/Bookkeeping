@@ -644,7 +644,7 @@ class AssetManagementWidget(QWidget):
             MessageHelper.show_warning(self, "警告", "找不到选中的账户数据！")
             return
         
-        if not MessageHelper.ask_confirmation(self, "确认删除", 
+        if MessageHelper.ask_confirmation(self, "确认删除", 
                                    f"确定要删除账户 '{account_name}' 吗？删除后将无法恢复！"):
             self.db_manager.delete_account(account_data[0])
             self.load_accounts()
@@ -762,7 +762,7 @@ class AssetManagementWidget(QWidget):
         amount = transfer_data[4]
         description = transfer_data[5]
         
-        if not MessageHelper.ask_confirmation(self, "确认删除", 
+        if MessageHelper.ask_confirmation(self, "确认删除", 
                                    f"确定要删除这条转账记录吗？\n"
                                    f"日期: {transfer_date}\n"
                                    f"转出账户: {from_account}\n"
@@ -3306,7 +3306,7 @@ class MainWindow(QMainWindow):
         ledger_id = current_item.data(0, Qt.ItemDataRole.UserRole)
         ledger_name = self.ledgers[ledger_id]['name']
         
-        if not MessageHelper.ask_confirmation(self, "确认删除", 
+        if MessageHelper.ask_confirmation(self, "确认删除", 
                                    f"确定要删除账本 '{ledger_name}' 吗？\n删除后将同时删除该账本下的所有交易记录！"):
             self.db_manager.delete_ledger(ledger_id)
             self.load_ledgers()
@@ -3465,7 +3465,7 @@ class MainWindow(QMainWindow):
         amount = transaction_data[6]
         account = transaction_data[7]
         
-        if not MessageHelper.ask_confirmation(self, "确认删除", 
+        if MessageHelper.ask_confirmation(self, "确认删除", 
                                    f"确定要删除这条交易记录吗？\n"
                                    f"日期: {transaction_date}\n"
                                    f"类型: {transaction_type}\n"
