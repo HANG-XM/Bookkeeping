@@ -202,6 +202,37 @@ class SystemSettingsDialog(BaseDialog):
         
         settings_layout.addLayout(stats_settings_layout)
         
+        # 数据管理设置分隔符
+        data_separator = QFrame()
+        data_separator.setFrameShape(QFrame.Shape.HLine)
+        data_separator.setStyleSheet(f"color: {theme_manager.get_color('border')};")
+        settings_layout.addWidget(data_separator)
+        
+        # 数据管理设置
+        data_settings_layout = QVBoxLayout()
+        
+        # 数据管理按钮
+        data_management_btn = QPushButton("📊 数据管理")
+        data_management_btn.clicked.connect(self.open_data_management)
+        StyleHelper.apply_button_style(data_management_btn)
+        data_settings_layout.addWidget(data_management_btn)
+        
+        # 数据管理说明
+        data_info = QLabel("数据管理提供导出导入功能，支持Excel和CSV格式，可导出记账记录、预算配置和账户信息。")
+        data_info.setWordWrap(True)
+        data_info.setStyleSheet(f"""
+            QLabel {{
+                color: {theme_manager.get_color('secondary_text')};
+                font-size: 12px;
+                padding: 10px;
+                background-color: {theme_manager.get_color('secondary_background')};
+                border-radius: 4px;
+            }}
+        """)
+        data_settings_layout.addWidget(data_info)
+        
+        settings_layout.addLayout(data_settings_layout)
+        
         settings_group.setLayout(settings_layout)
         layout.addWidget(settings_group)
         
@@ -248,6 +279,22 @@ class SystemSettingsDialog(BaseDialog):
             if hasattr(self.parent(), 'apply_theme'):
                 self.parent().apply_theme()
             MessageHelper.show_info(self, "成功", "主题已成功应用！")
+    
+    def open_data_management(self):
+        """打开数据管理"""
+        try:
+            from data_import_export import DataManagementDialog
+            # 获取数据库管理器实例
+            if hasattr(self.parent(), 'db_manager'):
+                db_manager = self.parent().db_manager
+            else:
+                # 如果父窗口没有db_manager，创建新实例
+                db_manager = DatabaseManager()
+            
+            dialog = DataManagementDialog(db_manager, self)
+            dialog.exec()
+        except Exception as e:
+            MessageHelper.show_error(self, "错误", f"无法打开数据管理：{str(e)}")
 
 
 class ThemeSelectionDialog(BaseDialog):

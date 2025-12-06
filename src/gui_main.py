@@ -911,6 +911,26 @@ class StatisticsWidget(QWidget):
         StyleHelper.apply_label_style(category_stats_label)
         options_layout.addWidget(category_stats_label)
         options_layout.addWidget(self.category_level_combo)
+        
+        # 导出统计结果按钮
+        export_stats_btn = QPushButton("📊 导出统计")
+        export_stats_btn.clicked.connect(self.export_statistics)
+        export_stats_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        options_layout.addWidget(export_stats_btn)
+        
         options_layout.addStretch()
         
         options_group.setLayout(options_layout)
@@ -1988,6 +2008,43 @@ class StatisticsWidget(QWidget):
         
         dialog.setLayout(layout)
         dialog.exec()
+    
+    def export_statistics(self):
+        """导出统计数据"""
+        if not self.current_ledger_id:
+            MessageHelper.show_warning(self, "提示", "请先选择账本！")
+            return
+        
+        try:
+            from data_import_export import ExportDialog
+            dialog = ExportDialog(self.db_manager, self)
+            
+            # 预设为筛选结果导出
+            dialog.filtered_radio.setChecked(True)
+            dialog.on_scope_changed()
+            
+            # 获取当前时间范围
+            start_date, end_date = self.get_date_range()
+            
+            # 设置导出配置的筛选条件
+            if hasattr(dialog, 'export_config'):
+                dialog.export_config.update({
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'ledger_id': self.current_ledger_id
+                })
+            else:
+                # 如果export_config还不存在，创建它
+                dialog.export_config = {
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'ledger_id': self.current_ledger_id
+                }
+            
+            dialog.exec()
+            
+        except Exception as e:
+            MessageHelper.show_error(self, "错误", f"导出统计失败：{str(e)}")
 
 
 class BudgetManagementWidget(QWidget):
@@ -2649,6 +2706,25 @@ class MainWindow(QMainWindow):
         self.advanced_toggle_btn.clicked.connect(self.toggle_advanced_search)
         basic_search_layout.addWidget(self.advanced_toggle_btn)
         
+        # 快捷导出按钮
+        export_search_btn = QPushButton("📤 导出结果")
+        export_search_btn.clicked.connect(self.export_search_results)
+        export_search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        basic_search_layout.addWidget(export_search_btn)
+        
         basic_search_layout.addStretch()
         search_layout.addLayout(basic_search_layout)
         
@@ -3066,6 +3142,37 @@ class MainWindow(QMainWindow):
         
         # 重新加载所有交易记录
         self.load_transactions()
+    
+    def export_search_results(self):
+        """导出搜索结果"""
+        if not self.current_ledger_id:
+            MessageHelper.show_warning(self, "提示", "请先选择账本！")
+            return
+        
+        try:
+            from data_import_export import ExportDialog
+            dialog = ExportDialog(self.db_manager, self)
+            
+            # 预设为筛选结果导出
+            dialog.filtered_radio.setChecked(True)
+            dialog.on_scope_changed()
+            
+            # 获取当前搜索条件
+            start_date = self.start_date_edit.date().toString('yyyy-MM-dd')
+            end_date = self.end_date_edit.date().toString('yyyy-MM-dd')
+            
+            # 构建导出配置
+            if hasattr(dialog, 'export_config'):
+                dialog.export_config.update({
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'ledger_id': self.current_ledger_id
+                })
+            
+            dialog.exec()
+            
+        except Exception as e:
+            MessageHelper.show_error(self, "错误", f"导出失败：{str(e)}")
     
     def add_ledger(self):
         dialog = AddLedgerDialog(self)
