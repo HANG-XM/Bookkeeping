@@ -970,9 +970,21 @@ class StatisticsWidget(QWidget):
         self.current_date = QDate.currentDate()
         self.show_chinese_amount = False
         self.category_level = "parent"  # parent, subcategory
+        self.current_ledger_id = None
         self.setup_ui()
         self.load_last_view()
         self.update_statistics()
+        
+        # 确保初始化时显示正确的视图专属内容
+        self.switch_view_content()
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
     
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -1361,6 +1373,28 @@ class StatisticsWidget(QWidget):
         
         self.update_date_display()
         self.update_statistics()
+        
+        # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
+        
+        # 更新视图专属内容
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+        
+        # 更新视图专属内容
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
     
     def switch_view_content(self):
         """切换视图专属内容"""
@@ -1434,6 +1468,22 @@ class StatisticsWidget(QWidget):
         
         self.update_date_display()
         self.update_statistics()
+        
+        # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
+        
+        # 更新视图专属内容
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
     
     def next_period(self):
         """切换到下一个时间段"""
@@ -1448,6 +1498,22 @@ class StatisticsWidget(QWidget):
         
         self.update_date_display()
         self.update_statistics()
+        
+        # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
+        
+        # 更新视图专属内容
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
     
     def on_custom_date_changed(self):
         """自定义日期改变"""
@@ -1459,6 +1525,16 @@ class StatisticsWidget(QWidget):
             self.end_date_edit.setDate(start_date)
         
         self.update_statistics()
+        
+        # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
     
     def set_quick_range(self, days):
         """设置快捷时间范围"""
@@ -1468,16 +1544,46 @@ class StatisticsWidget(QWidget):
         self.start_date_edit.setDate(start_date)
         self.end_date_edit.setDate(end_date)
         self.update_statistics()
+        
+            # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
     
     def toggle_chinese_amount(self, checked):
         """切换中文大写显示"""
         self.show_chinese_amount = checked
         self.update_statistics()
+        
+            # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
     
     def on_category_level_changed(self, text):
         """类别统计层级改变"""
         self.category_level = "subcategory" if "子类别" in text else "parent"
         self.update_statistics()
+        
+        # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
+        if self.current_view == "day":
+            self.update_day_view()
+        elif self.current_view == "week":
+            self.update_week_view()
+    
+    def set_current_ledger(self, ledger_id):
+        """设置当前账本ID"""
+        self.current_ledger_id = ledger_id
     
     def load_last_view(self):
         """加载上次使用的视图"""
@@ -1521,6 +1627,24 @@ class StatisticsWidget(QWidget):
                 
                 # 更新日期显示
                 self.update_date_display()
+                
+                # 更新视图专属内容
+                if self.current_view == "day":
+                    self.update_day_view()
+                elif self.current_view == "week":
+                    self.update_week_view()
+        else:
+            # 即使不启用自动恢复，也要确保默认视图正确显示
+            # 默认是日视图，确保自定义日期控件隐藏，导航按钮显示
+            self.custom_date_widget.hide()
+            self.prev_btn.show()
+            self.next_btn.show()
+            
+            # 切换视图专属内容
+            self.switch_view_content()
+            
+            # 更新日期显示
+            self.update_date_display()
     
     def save_current_view(self):
         """保存当前视图"""
@@ -1709,8 +1833,10 @@ class StatisticsWidget(QWidget):
     
     def update_day_view(self):
         """更新日视图内容"""
+        if not self.current_ledger_id:
+            return
         current_date_str = self.current_date.toString("yyyy-MM-dd")
-        transactions = self.db_manager.get_day_transactions(current_date_str)
+        transactions = self.db_manager.get_day_transactions(current_date_str, self.current_ledger_id)
         
         # 更新表格数据
         self.day_transaction_table.setRowCount(len(transactions))
@@ -1745,8 +1871,10 @@ class StatisticsWidget(QWidget):
     
     def update_week_view(self):
         """更新周视图内容"""
+        if not self.current_ledger_id:
+            return
         start_date, end_date = self.get_date_range()
-        week_trends = self.db_manager.get_week_trends(start_date, end_date)
+        week_trends = self.db_manager.get_week_trends(start_date, end_date, self.current_ledger_id)
         
         if not week_trends:
             # 显示空图表
@@ -2181,6 +2309,18 @@ class MainWindow(QMainWindow):
                 self.current_ledger_id = last_ledger_id
                 self.initialize_search_controls()
                 self.load_transactions()
+                
+                # 更新预算管理组件
+                self.budget_widget.set_current_ledger(last_ledger_id)
+                
+                # 更新统计组件
+                self.statistics_widget.set_current_ledger(last_ledger_id)
+                self.statistics_widget.update_statistics()
+                # 更新视图专属内容
+                if self.statistics_widget.current_view == "day":
+                    self.statistics_widget.update_day_view()
+                elif self.statistics_widget.current_view == "week":
+                    self.statistics_widget.update_week_view()
     
     def save_current_ledger(self):
         """保存当前账本信息"""
@@ -2674,6 +2814,15 @@ class MainWindow(QMainWindow):
             
             # 更新预算管理组件
             self.budget_widget.set_current_ledger(ledger_id)
+            
+            # 更新统计组件
+            self.statistics_widget.set_current_ledger(ledger_id)
+            self.statistics_widget.update_statistics()
+            # 更新视图专属内容
+            if self.statistics_widget.current_view == "day":
+                self.statistics_widget.update_day_view()
+            elif self.statistics_widget.current_view == "week":
+                self.statistics_widget.update_week_view()
             
             # 保存当前账本信息
             self.save_current_ledger()
