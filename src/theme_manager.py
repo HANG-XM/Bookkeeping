@@ -95,7 +95,9 @@ class ThemeManager:
     def __init__(self):
         self.current_theme = "default"
         self.settings_file = "theme_settings.json"
+        self.custom_themes_file = "custom_themes.json"
         self.load_settings()
+        self.load_custom_themes()
     
     def load_settings(self):
         """加载主题设置"""
@@ -106,6 +108,51 @@ class ThemeManager:
                     self.current_theme = settings.get('theme', 'default')
             except:
                 self.current_theme = "default"
+    
+    def load_custom_themes(self):
+        """加载自定义主题"""
+        if os.path.exists(self.custom_themes_file):
+            try:
+                with open(self.custom_themes_file, 'r', encoding='utf-8') as f:
+                    custom_themes = json.load(f)
+                    # 将自定义主题合并到主题字典中
+                    for theme_id, theme_data in custom_themes.items():
+                        self.THEMES[theme_id] = theme_data
+            except:
+                pass
+    
+    def save_custom_themes(self):
+        """保存自定义主题"""
+        custom_themes = {}
+        for theme_id, theme_data in self.THEMES.items():
+            if theme_id.startswith('custom_'):
+                custom_themes[theme_id] = theme_data
+        
+        try:
+            with open(self.custom_themes_file, 'w', encoding='utf-8') as f:
+                json.dump(custom_themes, f, ensure_ascii=False, indent=2)
+        except:
+            pass
+    
+    def add_custom_theme(self, theme_id, theme_data):
+        """添加自定义主题"""
+        self.THEMES[theme_id] = theme_data
+        self.save_custom_themes()
+    
+    def delete_custom_theme(self, theme_id):
+        """删除自定义主题"""
+        if theme_id.startswith('custom_') and theme_id in self.THEMES:
+            del self.THEMES[theme_id]
+            self.save_custom_themes()
+            # 如果删除的是当前主题，切换到默认主题
+            if self.current_theme == theme_id:
+                self.set_theme("default")
+            return True
+        return False
+    
+    def get_custom_themes(self):
+        """获取所有自定义主题"""
+        return {k: v for k, v in self.THEMES.items() if k.startswith('custom_')}
     
     def save_settings(self):
         """保存主题设置"""
