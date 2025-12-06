@@ -764,10 +764,10 @@ class AssetManagementWidget(QWidget):
                     data['bank'], data['description']
                 )
                 self.load_accounts()
-                # 刷新统计页面
+                # 刷新统计页面（使用防抖）
                 parent = self.parent()
-                if parent and hasattr(parent, 'statistics_widget'):
-                    parent.statistics_widget.update_statistics()
+                if parent and hasattr(parent, 'schedule_statistics_update'):
+                    parent.schedule_statistics_update(200)
                 MessageHelper.show_info(self, "成功", "账户添加成功！")
     
     def edit_account(self):
@@ -798,10 +798,10 @@ class AssetManagementWidget(QWidget):
                     data['bank'], data['description']
                 )
                 self.load_accounts()
-                # 刷新统计页面
+                # 刷新统计页面（使用防抖）
                 parent = self.parent()
-                if parent and hasattr(parent, 'statistics_widget'):
-                    parent.statistics_widget.update_statistics()
+                if parent and hasattr(parent, 'schedule_statistics_update'):
+                    parent.schedule_statistics_update(200)
                 MessageHelper.show_info(self, "成功", "账户修改成功！")
     
     def delete_account(self):
@@ -826,10 +826,10 @@ class AssetManagementWidget(QWidget):
                                    f"确定要删除账户 '{account_name}' 吗？删除后将无法恢复！"):
             self.db_manager.delete_account(account_data[0])
             self.load_accounts()
-            # 刷新统计页面
+            # 刷新统计页面（使用防抖）
             parent = self.parent()
-            if parent and hasattr(parent, 'statistics_widget'):
-                parent.statistics_widget.update_statistics()
+            if parent and hasattr(parent, 'schedule_statistics_update'):
+                parent.schedule_statistics_update(200)
             MessageHelper.show_info(self, "成功", "账户删除成功！")
     
     def add_transfer(self):
@@ -853,10 +853,10 @@ class AssetManagementWidget(QWidget):
                 )
                 self.load_accounts()
                 self.load_transfers()
-                # 刷新统计页面
+                # 刷新统计页面（使用防抖）
                 parent = self.parent()
-                if parent and hasattr(parent, 'statistics_widget'):
-                    parent.statistics_widget.update_statistics()
+                if parent and hasattr(parent, 'schedule_statistics_update'):
+                    parent.schedule_statistics_update(200)
                 MessageHelper.show_info(self, "成功", "转账记录添加成功！")
     
     def edit_transfer(self):
@@ -915,10 +915,10 @@ class AssetManagementWidget(QWidget):
                 )
                 self.load_accounts()
                 self.load_transfers()
-                # 刷新统计页面
+                # 刷新统计页面（使用防抖）
                 parent = self.parent()
-                if parent and hasattr(parent, 'statistics_widget'):
-                    parent.statistics_widget.update_statistics()
+                if parent and hasattr(parent, 'schedule_statistics_update'):
+                    parent.schedule_statistics_update(200)
                 MessageHelper.show_info(self, "成功", "转账记录修改成功！")
     
     def delete_transfer(self):
@@ -955,10 +955,10 @@ class AssetManagementWidget(QWidget):
             self.db_manager.delete_transfer(transfer_data[0])
             self.load_accounts()
             self.load_transfers()
-            # 刷新统计页面
+            # 刷新统计页面（使用防抖）
             parent = self.parent()
-            if parent and hasattr(parent, 'statistics_widget'):
-                parent.statistics_widget.update_statistics()
+            if parent and hasattr(parent, 'schedule_statistics_update'):
+                parent.schedule_statistics_update(200)
             MessageHelper.show_info(self, "成功", "转账记录删除成功！")
 
 
@@ -971,6 +971,17 @@ class StatisticsWidget(QWidget):
         self.show_chinese_amount = False
         self.category_level = "parent"  # parent, subcategory
         self.current_ledger_id = None
+        
+        # 性能优化：添加缓存机制
+        self._cache = {
+            'last_date_range': None,
+            'last_ledger_id': None,
+            'cached_data': None,
+            'cache_timestamp': 0
+        }
+        self._update_pending = False  # 防止重复更新
+        self._batch_update_timer = None  # 批量更新定时器
+        
         self.setup_ui()
         self.load_last_view()
         self.update_statistics()
@@ -1372,7 +1383,13 @@ class StatisticsWidget(QWidget):
         self.switch_view_content()
         
         self.update_date_display()
-        self.update_statistics()
+        
+        # 清除缓存，因为视图改变了
+        self._cache['last_date_range'] = None
+        self._cache['cached_data'] = None
+        
+        # 使用延迟更新避免频繁调用
+        self.schedule_update(200)
         
         # 更新视图专属内容（虽然自定义视图没有专属内容，但保持一致性）
         if self.current_view == "day":
@@ -1703,91 +1720,73 @@ class StatisticsWidget(QWidget):
         """创建圆环图"""
         ChartUtils.create_pie_chart(figure, data, labels, title, colors)
     
+    def _is_cache_valid(self, start_date, end_date):
+        """检查缓存是否有效"""
+        import time
+        current_time = time.time()
+        
+        # 缓存5秒内有效，避免频繁刷新
+        if (self._cache['last_date_range'] == (start_date, end_date) and
+            self._cache['last_ledger_id'] == self.current_ledger_id and
+            current_time - self._cache['cache_timestamp'] < 5):
+            return True
+        return False
+    
+    def _update_cache(self, start_date, end_date, data):
+        """更新缓存"""
+        import time
+        self._cache['last_date_range'] = (start_date, end_date)
+        self._cache['last_ledger_id'] = self.current_ledger_id
+        self._cache['cached_data'] = data
+        self._cache['cache_timestamp'] = time.time()
+    
+    def schedule_update(self, delay=300):
+        """延迟执行更新，避免频繁调用（默认300ms）"""
+        from PyQt6.QtCore import QTimer
+        
+        if self._batch_update_timer:
+            self._batch_update_timer.stop()
+            
+        self._batch_update_timer = QTimer()
+        self._batch_update_timer.setSingleShot(True)
+        self._batch_update_timer.timeout.connect(self._execute_pending_update)
+        self._batch_update_timer.start(delay)
+    
+    def _execute_pending_update(self):
+        """执行待处理的更新"""
+        if not self._update_pending:
+            self._update_pending = True
+            try:
+                self.update_statistics()
+            finally:
+                self._update_pending = False
+                self._batch_update_timer = None
+    
     def update_statistics(self):
         """更新统计数据"""
         start_date, end_date = self.get_date_range()
+        
+        # 检查缓存是否有效
+        if self._is_cache_valid(start_date, end_date):
+            # 使用缓存数据更新UI
+            cached_data = self._cache['cached_data']
+            if cached_data:
+                self._update_ui_from_cache(cached_data)
+                return
         
         # 禁用UI更新以提高性能
         self.setUpdatesEnabled(False)
         
         try:
-            # 获取收支汇总
-            summary = self.db_manager.get_statistics_summary(start_date, end_date)
+            # 批量获取所有统计数据以减少数据库连接
+            all_data = self._get_all_statistics_data(start_date, end_date)
             
-            # 更新卡片显示
-            self.income_card_amount.setText(f"¥{summary['total_income']:.2f}")
-            self.expense_card_amount.setText(f"¥{summary['total_expense']:.2f}")
-            self.net_card_amount.setText(f"¥{summary['net_income']:.2f}")
+            # 缓存数据
+            self._update_cache(start_date, end_date, all_data)
             
-            if self.show_chinese_amount:
-                self.income_card_chinese.setText(number_to_chinese(summary['total_income']))
-                self.expense_card_chinese.setText(number_to_chinese(summary['total_expense']))
-                self.net_card_chinese.setText(number_to_chinese(abs(summary['net_income'])))
-            else:
-                self.income_card_chinese.setText("")
-                self.expense_card_chinese.setText("")
-                self.net_card_chinese.setText("")
+            # 使用数据更新UI
+            self._update_ui_from_data(all_data)
             
-            # 批量获取统计数据以减少数据库连接
-            income_stats = self.db_manager.get_category_statistics(start_date, end_date, "收入", self.category_level)
-            expense_stats = self.db_manager.get_category_statistics(start_date, end_date, "支出", self.category_level)
-            account_stats = self.db_manager.get_account_statistics(start_date, end_date)
-            settlement_stats = self.db_manager.get_settlement_statistics(start_date, end_date)
-            refund_stats = self.db_manager.get_refund_statistics(start_date, end_date)
-            
-            # 更新收入结构饼图
-            if income_stats and summary['total_income'] > 0:
-                income_labels = [item[0] for item in income_stats]
-                income_data = [item[1] for item in income_stats]
-                # 使用工具方法限制显示数量
-                income_labels, income_data = ChartUtils.limit_data_display(income_labels, income_data, 8)
-                self.create_pie_chart(self.income_figure, income_data, income_labels, "收入结构")
-            else:
-                self.create_pie_chart(self.income_figure, [], [], "收入结构")
-            
-            # 更新支出结构饼图
-            if expense_stats and summary['total_expense'] > 0:
-                expense_labels = [item[0] for item in expense_stats]
-                expense_data = [item[1] for item in expense_stats]
-                # 使用工具方法限制显示数量
-                expense_labels, expense_data = ChartUtils.limit_data_display(expense_labels, expense_data, 8)
-                self.create_pie_chart(self.expense_figure, expense_data, expense_labels, "支出结构")
-            else:
-                self.create_pie_chart(self.expense_figure, [], [], "支出结构")
-            
-            # 更新账户分布饼图
-            if account_stats:
-                account_labels = [item[0] for item in account_stats]
-                account_data = [item[1] + item[2] for item in account_stats]  # 收入+支出
-                # 使用工具方法限制显示数量
-                account_labels, account_data = ChartUtils.limit_data_display(account_labels, account_data, 6)
-                self.create_pie_chart(self.account_figure, account_data, account_labels, "账户分布")
-            else:
-                self.create_pie_chart(self.account_figure, [], [], "账户分布")
-            
-            # 使用工具方法安全刷新画布
-            ChartUtils.safe_draw_canvas(self.income_canvas)
-            ChartUtils.safe_draw_canvas(self.expense_canvas)
-            ChartUtils.safe_draw_canvas(self.account_canvas)
-            
-            # 更新销账状态统计
-            self.settled_amount_label.setText(f"¥{settlement_stats['settled_amount']:.2f}")
-            self.unsettled_amount_label.setText(f"¥{settlement_stats['unsettled_amount']:.2f}")
-            
-            if settlement_stats['total_amount'] > 0:
-                settled_ratio = (settlement_stats['settled_amount'] / settlement_stats['total_amount'] * 100)
-                self.settled_ratio_label.setText(f"{settled_ratio:.1f}%")
-            else:
-                self.settled_ratio_label.setText("0%")
-            
-            # 更新退款统计
-            self.refund_amount_label.setText(f"¥{refund_stats['total_refund']:.2f}")
-            self.refund_count_label.setText(str(refund_stats['refund_count']))
-            self.refund_ratio_label.setText(f"{refund_stats['refund_ratio']:.1f}%")
-            
-            # 更新预算统计
-            self.update_budget_statistics(start_date, end_date)
-        
         finally:
             # 重新启用UI更新
             self.setUpdatesEnabled(True)
@@ -1795,6 +1794,111 @@ class StatisticsWidget(QWidget):
         
         # 更新视图专属内容
         self.update_view_specific_content()
+    
+    def _get_all_statistics_data(self, start_date, end_date):
+        """批量获取所有统计数据，减少数据库连接次数"""
+        # 获取收支汇总
+        summary = self.db_manager.get_statistics_summary(start_date, end_date)
+        
+        # 批量获取统计数据以减少数据库连接
+        income_stats = self.db_manager.get_category_statistics(start_date, end_date, "收入", self.category_level)
+        expense_stats = self.db_manager.get_category_statistics(start_date, end_date, "支出", self.category_level)
+        account_stats = self.db_manager.get_account_statistics(start_date, end_date)
+        settlement_stats = self.db_manager.get_settlement_statistics(start_date, end_date)
+        refund_stats = self.db_manager.get_refund_statistics(start_date, end_date)
+        
+        return {
+            'summary': summary,
+            'income_stats': income_stats,
+            'expense_stats': expense_stats,
+            'account_stats': account_stats,
+            'settlement_stats': settlement_stats,
+            'refund_stats': refund_stats
+        }
+    
+    def _update_ui_from_cache(self, cached_data):
+        """从缓存数据更新UI"""
+        self._update_ui_from_data(cached_data)
+        
+        # 更新视图专属内容
+        self.update_view_specific_content()
+    
+    def _update_ui_from_data(self, data):
+        """从数据更新UI"""
+        summary = data['summary']
+        income_stats = data['income_stats']
+        expense_stats = data['expense_stats']
+        account_stats = data['account_stats']
+        settlement_stats = data['settlement_stats']
+        refund_stats = data['refund_stats']
+        
+        # 更新卡片显示
+        self.income_card_amount.setText(f"¥{summary['total_income']:.2f}")
+        self.expense_card_amount.setText(f"¥{summary['total_expense']:.2f}")
+        self.net_card_amount.setText(f"¥{summary['net_income']:.2f}")
+        
+        if self.show_chinese_amount:
+            self.income_card_chinese.setText(number_to_chinese(summary['total_income']))
+            self.expense_card_chinese.setText(number_to_chinese(summary['total_expense']))
+            self.net_card_chinese.setText(number_to_chinese(abs(summary['net_income'])))
+        else:
+            self.income_card_chinese.setText("")
+            self.expense_card_chinese.setText("")
+            self.net_card_chinese.setText("")
+        
+        # 更新收入结构饼图
+        if income_stats and summary['total_income'] > 0:
+            income_labels = [item[0] for item in income_stats]
+            income_data = [item[1] for item in income_stats]
+            # 使用工具方法限制显示数量
+            income_labels, income_data = ChartUtils.limit_data_display(income_labels, income_data, 8)
+            self.create_pie_chart(self.income_figure, income_data, income_labels, "收入结构")
+        else:
+            self.create_pie_chart(self.income_figure, [], [], "收入结构")
+        
+        # 更新支出结构饼图
+        if expense_stats and summary['total_expense'] > 0:
+            expense_labels = [item[0] for item in expense_stats]
+            expense_data = [item[1] for item in expense_stats]
+            # 使用工具方法限制显示数量
+            expense_labels, expense_data = ChartUtils.limit_data_display(expense_labels, expense_data, 8)
+            self.create_pie_chart(self.expense_figure, expense_data, expense_labels, "支出结构")
+        else:
+            self.create_pie_chart(self.expense_figure, [], [], "支出结构")
+        
+        # 更新账户分布饼图
+        if account_stats:
+            account_labels = [item[0] for item in account_stats]
+            account_data = [item[1] + item[2] for item in account_stats]  # 收入+支出
+            # 使用工具方法限制显示数量
+            account_labels, account_data = ChartUtils.limit_data_display(account_labels, account_data, 6)
+            self.create_pie_chart(self.account_figure, account_data, account_labels, "账户分布")
+        else:
+            self.create_pie_chart(self.account_figure, [], [], "账户分布")
+        
+        # 使用工具方法安全刷新画布
+        ChartUtils.safe_draw_canvas(self.income_canvas)
+        ChartUtils.safe_draw_canvas(self.expense_canvas)
+        ChartUtils.safe_draw_canvas(self.account_canvas)
+        
+        # 更新销账状态统计
+        self.settled_amount_label.setText(f"¥{settlement_stats['settled_amount']:.2f}")
+        self.unsettled_amount_label.setText(f"¥{settlement_stats['unsettled_amount']:.2f}")
+        
+        if settlement_stats['total_amount'] > 0:
+            settled_ratio = (settlement_stats['settled_amount'] / settlement_stats['total_amount'] * 100)
+            self.settled_ratio_label.setText(f"{settled_ratio:.1f}%")
+        else:
+            self.settled_ratio_label.setText("0%")
+        
+        # 更新退款统计
+        self.refund_amount_label.setText(f"¥{refund_stats['total_refund']:.2f}")
+        self.refund_count_label.setText(str(refund_stats['refund_count']))
+        self.refund_ratio_label.setText(f"{refund_stats['refund_ratio']:.1f}%")
+        
+        # 更新预算统计
+        start_date, end_date = self.get_date_range()
+        self.update_budget_statistics(start_date, end_date)
     
     def update_budget_statistics(self, start_date, end_date):
         """更新预算统计"""
@@ -1836,19 +1940,65 @@ class StatisticsWidget(QWidget):
         if not self.current_ledger_id:
             return
         current_date_str = self.current_date.toString("yyyy-MM-dd")
-        transactions = self.db_manager.get_day_transactions(current_date_str, self.current_ledger_id)
         
-        # 更新表格数据
-        self.day_transaction_table.setRowCount(len(transactions))
+        # 检查缓存键
+        cache_key = f"day_view_{current_date_str}_{self.current_ledger_id}_{self.day_sort_combo.currentText()}"
+        current_time = __import__('time').time()
         
-        sort_by_time = self.day_sort_combo.currentText() == "按时间排序"
+        # 检查缓存是否有效（3秒内）
+        if (hasattr(self, '_day_view_cache') and 
+            cache_key in self._day_view_cache and 
+            current_time - self._day_view_cache[cache_key]['timestamp'] < 3):
+            cached_data = self._day_view_cache[cache_key]['data']
+            self._update_day_view_ui(cached_data)
+            return
         
-        # 根据排序方式重新组织数据
-        if not sort_by_time:
-            # 按金额排序
-            transactions_sorted = sorted(transactions, key=lambda x: abs(x[4]), reverse=True)
-        else:
-            transactions_sorted = transactions
+        # 禁用UI更新以提高性能
+        self.day_transaction_table.setUpdatesEnabled(False)
+        try:
+            transactions = self.db_manager.get_day_transactions(current_date_str, self.current_ledger_id)
+            
+            # 更新表格数据
+            self.day_transaction_table.setRowCount(len(transactions))
+            
+            sort_by_time = self.day_sort_combo.currentText() == "按时间排序"
+            
+            # 根据排序方式重新组织数据
+            if not sort_by_time:
+                # 按金额排序
+                transactions_sorted = sorted(transactions, key=lambda x: abs(x[4]), reverse=True)
+            else:
+                transactions_sorted = transactions
+            
+            # 获取消费峰值时段
+            peak_result = self.db_manager.get_peak_consumption_hours(current_date_str)
+            
+            # 准备数据
+            data = {
+                'transactions': transactions_sorted,
+                'peak_result': peak_result
+            }
+            
+            # 缓存数据
+            if not hasattr(self, '_day_view_cache'):
+                self._day_view_cache = {}
+            self._day_view_cache[cache_key] = {
+                'data': data,
+                'timestamp': current_time
+            }
+            
+            # 更新UI
+            self._update_day_view_ui(data)
+            
+        finally:
+            # 重新启用UI更新
+            self.day_transaction_table.setUpdatesEnabled(True)
+            self.day_transaction_table.update()
+    
+    def _update_day_view_ui(self, data):
+        """更新日视图UI"""
+        transactions_sorted = data['transactions']
+        peak_result = data['peak_result']
         
         for row, trans in enumerate(transactions_sorted):
             (created_time, transaction_type, category, subcategory, amount, account, description) = trans
@@ -1862,7 +2012,6 @@ class StatisticsWidget(QWidget):
             self.day_transaction_table.setItem(row, 5, QTableWidgetItem(description or ""))
         
         # 获取消费峰值时段
-        peak_result = self.db_manager.get_peak_consumption_hours(current_date_str)
         if peak_result:
             time_period, total_amount, count = peak_result
             self.peak_time_label.setText(f"🔥 消费峰值时段：{time_period} 消费 ¥{total_amount:.2f}（{count}笔）")
@@ -1874,7 +2023,42 @@ class StatisticsWidget(QWidget):
         if not self.current_ledger_id:
             return
         start_date, end_date = self.get_date_range()
+        
+        # 检查缓存键
+        cache_key = f"week_view_{start_date}_{end_date}_{self.current_ledger_id}"
+        current_time = __import__('time').time()
+        
+        # 检查缓存是否有效（5秒内，因为周数据变化较少）
+        if (hasattr(self, '_week_view_cache') and 
+            cache_key in self._week_view_cache and 
+            current_time - self._week_view_cache[cache_key]['timestamp'] < 5):
+            cached_data = self._week_view_cache[cache_key]['data']
+            self._update_week_view_ui(cached_data)
+            return
+        
         week_trends = self.db_manager.get_week_trends(start_date, end_date, self.current_ledger_id)
+        
+        # 准备数据
+        data = {
+            'week_trends': week_trends,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        # 缓存数据
+        if not hasattr(self, '_week_view_cache'):
+            self._week_view_cache = {}
+        self._week_view_cache[cache_key] = {
+            'data': data,
+            'timestamp': current_time
+        }
+        
+        # 更新UI
+        self._update_week_view_ui(data)
+    
+    def _update_week_view_ui(self, data):
+        """更新周视图UI"""
+        week_trends = data['week_trends']
         
         if not week_trends:
             # 显示空图表
@@ -2288,6 +2472,7 @@ class MainWindow(QMainWindow):
         self.db_manager = DatabaseManager()
         self.current_ledger_id = None
         self.ledgers = {}
+        self._stats_update_timer = None  # 统计更新防抖定时器
         self.setup_ui()
         self.load_ledgers()
         self.apply_theme()
@@ -2315,7 +2500,7 @@ class MainWindow(QMainWindow):
                 
                 # 更新统计组件
                 self.statistics_widget.set_current_ledger(last_ledger_id)
-                self.statistics_widget.update_statistics()
+                self.statistics_widget.schedule_update(100)
                 # 更新视图专属内容
                 if self.statistics_widget.current_view == "day":
                     self.statistics_widget.update_day_view()
@@ -2331,6 +2516,24 @@ class MainWindow(QMainWindow):
             ledger_info = self.ledgers[self.current_ledger_id]
             settings.setValue("last_ledger_id", self.current_ledger_id)
             settings.setValue("last_ledger_info", f"{ledger_info['name']} ({ledger_info['type']})")
+    
+    def schedule_statistics_update(self, delay=300):
+        """防抖更新统计数据，避免频繁调用"""
+        from PyQt6.QtCore import QTimer
+        
+        if self._stats_update_timer:
+            self._stats_update_timer.stop()
+            
+        self._stats_update_timer = QTimer()
+        self._stats_update_timer.setSingleShot(True)
+        self._stats_update_timer.timeout.connect(self._execute_statistics_update)
+        self._stats_update_timer.start(delay)
+    
+    def _execute_statistics_update(self):
+        """执行统计更新"""
+        if hasattr(self, 'statistics_widget') and self.statistics_widget:
+            self.statistics_widget.update_statistics()
+        self._stats_update_timer = None
     
     def apply_theme(self):
         """应用主题到整个应用"""
@@ -2817,7 +3020,7 @@ class MainWindow(QMainWindow):
             
             # 更新统计组件
             self.statistics_widget.set_current_ledger(ledger_id)
-            self.statistics_widget.update_statistics()
+            self.statistics_widget.schedule_update(100)
             # 更新视图专属内容
             if self.statistics_widget.current_view == "day":
                 self.statistics_widget.update_day_view()
