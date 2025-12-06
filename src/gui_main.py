@@ -2544,6 +2544,10 @@ class MainWindow(QMainWindow):
         theme_settings_action = settings_menu.addAction("主题设置")
         theme_settings_action.triggered.connect(self.open_theme_settings)
         
+        # 数据管理动作
+        data_management_action = settings_menu.addAction("数据管理")
+        data_management_action.triggered.connect(self.open_data_management)
+        
         settings_menu.addSeparator()
         
         # 退出动作
@@ -2561,6 +2565,15 @@ class MainWindow(QMainWindow):
         dialog = ThemeSelectionDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.apply_theme()
+    
+    def open_data_management(self):
+        """打开数据管理"""
+        try:
+            from data_import_export import DataManagementDialog
+            dialog = DataManagementDialog(self.db_manager, self)
+            dialog.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"无法打开数据管理：{str(e)}")
     
     def on_settings_changed(self):
         """设置变更后的处理"""
