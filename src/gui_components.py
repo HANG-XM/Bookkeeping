@@ -207,9 +207,6 @@ class SystemSettingsDialog(QDialog):
         settings_group.setLayout(settings_layout)
         layout.addWidget(settings_group)
         
-        settings_group.setLayout(settings_layout)
-        layout.addWidget(settings_group)
-        
         # 按钮区域
         button_layout = QHBoxLayout()
         button_layout.addStretch()
