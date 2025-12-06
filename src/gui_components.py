@@ -19,7 +19,7 @@ import matplotlib
 
 from theme_manager import theme_manager, number_to_chinese
 from database_manager import DatabaseManager
-from ui_base_components import StyleHelper, MessageHelper
+from ui_base_components import StyleHelper, MessageHelper, BaseDialog
 from chart_utils import ChartUtils
 
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
@@ -28,13 +28,12 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 # 对话框类已移至 dialogs.py 模块
 
 
-class SystemSettingsDialog(QDialog):
+class SystemSettingsDialog(BaseDialog):
     """系统设置对话框"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("系统设置")
-        self.setModal(True)
         self.setFixedSize(500, 400)
         self.setup_ui()
     
@@ -110,13 +109,12 @@ class SystemSettingsDialog(QDialog):
         """)
         
         # 获取设置状态
-        from PyQt6.QtCore import QSettings
-        settings = QSettings()
-        auto_open = settings.value("auto_open_last_ledger", False, type=bool)
+        from ui_base_components import config_manager
+        auto_open = config_manager.get_auto_open_last_ledger()
         self.auto_open_check.setChecked(auto_open)
         
         # 上次账本信息
-        last_ledger_info = settings.value("last_ledger_info", "")
+        last_ledger_info = config_manager.get_last_ledger_info()
         if last_ledger_info:
             self.last_ledger_label = QLabel(f"上次账本: {last_ledger_info}")
         else:
@@ -168,11 +166,11 @@ class SystemSettingsDialog(QDialog):
         """)
         
         # 获取设置状态
-        auto_restore_stats_view = settings.value("auto_restore_stats_view", False, type=bool)
+        auto_restore_stats_view = config_manager.get_auto_restore_stats_view()
         self.auto_restore_stats_view_check.setChecked(auto_restore_stats_view)
         
         # 上次统计视图信息
-        last_stats_view = settings.value("last_stats_view", "day")
+        last_stats_view = config_manager.get_last_stats_view()
         view_names = {"day": "日视图", "week": "周视图", "month": "月视图", "year": "年视图", "custom": "自定义时间"}
         self.last_stats_view_label = QLabel(f"上次视图: {view_names.get(last_stats_view, '日视图')}")
         self.last_stats_view_label.setStyleSheet(f"""
@@ -226,14 +224,13 @@ class SystemSettingsDialog(QDialog):
     
     def save_settings(self):
         """保存设置"""
-        from PyQt6.QtCore import QSettings
-        settings = QSettings()
+        from ui_base_components import config_manager
         
         # 保存自动打开账本设置
-        settings.setValue("auto_open_last_ledger", self.auto_open_check.isChecked())
+        config_manager.set_auto_open_last_ledger(self.auto_open_check.isChecked())
         
         # 保存自动恢复统计视图设置
-        settings.setValue("auto_restore_stats_view", self.auto_restore_stats_view_check.isChecked())
+        config_manager.set_auto_restore_stats_view(self.auto_restore_stats_view_check.isChecked())
         
         # 通知父窗口（如果需要）
         if hasattr(self.parent(), 'on_settings_changed'):
@@ -253,13 +250,12 @@ class SystemSettingsDialog(QDialog):
             MessageHelper.show_info(self, "成功", "主题已成功应用！")
 
 
-class ThemeSelectionDialog(QDialog):
+class ThemeSelectionDialog(BaseDialog):
     """主题选择对话框"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("主题设置")
-        self.setModal(True)
         self.setFixedSize(800, 600)
         self.setup_ui()
         self.load_current_theme()
@@ -545,44 +541,32 @@ class CategoryButton(QPushButton):
         self.update_style()
 
 
-class AddLedgerDialog(QDialog):
+class AddLedgerDialog(BaseDialog):
+    """添加账本对话框"""
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("添加账本")
-        self.setModal(True)
         self.setup_ui()
     
     def setup_ui(self):
         layout = QVBoxLayout()
-        form_layout = QFormLayout()
+        form_layout = self.create_form_layout()
         
-        self.name_edit = QLineEdit()
-        self.type_combo = QComboBox()
-        self.type_combo.addItems(["个人", "家庭", "专项"])
-        self.description_edit = QTextEdit()
-        self.description_edit.setMaximumHeight(80)
+        # 账本名称
+        self.name_edit = self.create_line_edit()
+        self.add_form_row(form_layout, "账本名称", self.name_edit)
         
-        ledger_name_label = QLabel("账本名称:")
-        StyleHelper.apply_label_style(ledger_name_label)
-        form_layout.addRow(ledger_name_label, self.name_edit)
+        # 账本类型
+        self.type_combo = self.create_combo_box(["个人", "家庭", "专项"])
+        self.add_form_row(form_layout, "账本类型", self.type_combo)
         
-        ledger_type_label = QLabel("账本类型:")
-        StyleHelper.apply_label_style(ledger_type_label)
-        form_layout.addRow(ledger_type_label, self.type_combo)
+        # 备注
+        self.description_edit = self.create_text_edit(80)
+        self.add_form_row(form_layout, "备注", self.description_edit)
         
-        ledger_note_label = QLabel("备注:")
-        StyleHelper.apply_label_style(ledger_note_label)
-        form_layout.addRow(ledger_note_label, self.description_edit)
-        
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("确定")
-        StyleHelper.apply_button_style(ok_button)
-        cancel_button = QPushButton("取消")
-        StyleHelper.apply_button_style(cancel_button)
-        ok_button.clicked.connect(self.accept)
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(ok_button)
-        button_layout.addWidget(cancel_button)
+        # 按钮
+        button_layout = self.create_button_layout()
         
         layout.addLayout(form_layout)
         layout.addLayout(button_layout)

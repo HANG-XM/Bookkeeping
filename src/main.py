@@ -1,8 +1,8 @@
 import sys
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QSettings
 from gui_main import MainWindow
 from theme_manager import theme_manager
+from ui_base_components import config_manager
 
 def main():
     app = QApplication(sys.argv)
@@ -15,9 +15,6 @@ def main():
     # 设置应用程序样式
     app.setStyle('Fusion')
     
-    # 配置应用程序设置
-    settings = QSettings()
-    
     # 设置字体（如果需要）
     font = app.font()
     font.setFamily("Microsoft YaHei, SimHei, Arial")
@@ -27,10 +24,7 @@ def main():
     window = MainWindow()
     
     # 恢复窗口状态
-    if settings.contains("geometry"):
-        window.restoreGeometry(settings.value("geometry"))
-    if settings.contains("windowState"):
-        window.restoreState(settings.value("windowState"))
+    config_manager.restore_window_geometry(window)
     
     window.show()
     
@@ -38,8 +32,7 @@ def main():
     exit_code = app.exec()
     
     # 保存窗口状态
-    settings.setValue("geometry", window.saveGeometry())
-    settings.setValue("windowState", window.saveState())
+    config_manager.save_window_geometry(window)
     
     # 清理资源
     try:

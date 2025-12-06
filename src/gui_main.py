@@ -19,7 +19,7 @@ from database_manager import DatabaseManager
 from gui_components import (SystemSettingsDialog, ThemeSelectionDialog, CategoryButton, 
                            AddLedgerDialog)
 from dialogs import EditIncomeDialog, AddIncomeDialog, EditExpenseDialog, AddExpenseDialog
-from ui_base_components import StyleHelper, MessageHelper, BaseAccountDialog
+from ui_base_components import StyleHelper, MessageHelper, BaseAccountDialog, BaseTransferDialog, BaseBudgetDialog
 from chart_utils import ChartUtils
 
 matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
@@ -71,106 +71,59 @@ class AddAccountDialog(BaseAccountDialog):
         self.setLayout(layout)
 
 
-class TransferDialog(QDialog):
+class TransferDialog(BaseTransferDialog):
+    """转账对话框"""
+    
     def __init__(self, db_manager, parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
+        super().__init__(db_manager, parent)
         self.setWindowTitle("资金流转")
-        self.setModal(True)
         self.setup_ui()
-        self.load_accounts()
     
     def setup_ui(self):
-        layout = QVBoxLayout()
-        form_layout = QFormLayout()
-        
-        # 转账日期
-        self.date_edit = QDateTimeEdit()
-        self.date_edit.setDateTime(QDateTime.currentDateTime())
-        self.date_edit.setDisplayFormat("yyyy-MM-dd")
-        
-        # 转出账户
-        self.from_account_combo = QComboBox()
-        
-        # 转入账户
-        self.to_account_combo = QComboBox()
-        
-        # 转账金额
-        self.amount_spin = QDoubleSpinBox()
-        self.amount_spin.setRange(0, 999999.99)
-        self.amount_spin.setDecimals(2)
-        self.amount_spin.setPrefix("¥")
-        
-        # 备注
-        self.description_edit = QLineEdit()
-        
-        transfer_date_label = QLabel("转账日期:")
-        StyleHelper.apply_label_style(transfer_date_label)
-        form_layout.addRow(transfer_date_label, self.date_edit)
-        
-        from_account_label = QLabel("转出账户:")
-        StyleHelper.apply_label_style(from_account_label)
-        form_layout.addRow(from_account_label, self.from_account_combo)
-        
-        to_account_label = QLabel("转入账户:")
-        StyleHelper.apply_label_style(to_account_label)
-        form_layout.addRow(to_account_label, self.to_account_combo)
-        
-        transfer_amount_label = QLabel("转账金额:")
-        StyleHelper.apply_label_style(transfer_amount_label)
-        form_layout.addRow(transfer_amount_label, self.amount_spin)
-        
-        transfer_note_label = QLabel("备注:")
-        StyleHelper.apply_label_style(transfer_note_label)
-        form_layout.addRow(transfer_note_label, self.description_edit)
-        
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("确定")
-        cancel_button = QPushButton("取消")
-        ok_button.clicked.connect(self.accept)
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(ok_button)
-        button_layout.addWidget(cancel_button)
-        
-        layout.addLayout(form_layout)
-        layout.addLayout(button_layout)
+        layout = self.setup_transfer_form()
         self.setLayout(layout)
-    
-    def load_accounts(self):
-        accounts = self.db_manager.get_accounts()
-        self.from_account_combo.clear()
-        self.to_account_combo.clear()
-        
-        for account in accounts:
-            self.from_account_combo.addItem(f"{account[1]} (余额: ¥{account[3]:.2f})")
-            self.to_account_combo.addItem(f"{account[1]} (余额: ¥{account[3]:.2f})")
-    
-    def get_data(self):
-        # 提取账户名称（去掉余额信息）
-        from_account = self.from_account_combo.currentText().split(" (余额:")[0]
-        to_account = self.to_account_combo.currentText().split(" (余额:")[0]
-        
-        return {
-            'transfer_date': self.date_edit.date().toString("yyyy-MM-dd"),
-            'from_account': from_account,
-            'to_account': to_account,
-            'amount': self.amount_spin.value(),
-            'description': self.description_edit.text()
-        }
 
 
-class EditTransferDialog(QDialog):
+class EditTransferDialog(BaseTransferDialog):
     """编辑转账对话框"""
     
     def __init__(self, transfer_data, db_manager, parent=None):
-        super().__init__(parent)
+        super().__init__(db_manager, parent)
         self.transfer_data = transfer_data
-        self.db_manager = db_manager
         self.setWindowTitle("编辑转账")
-        self.setModal(True)
         self.setup_ui()
-        self.load_accounts()
         self.load_transfer_data()
+    
+    def load_transfer_data(self):
+        """加载转账数据"""
+        if not self.transfer_data:
+            return
+        
+        from PyQt6.QtCore import QDate
+        transfer_id, transfer_date, from_account, to_account, amount, description, created_time = self.transfer_data
+        
+        self.date_edit.setDate(QDate.fromString(transfer_date, "yyyy-MM-dd"))
+        self.amount_spin.setValue(amount)
+        self.description_edit.setText(description or "")
+        
+        # 设置账户选择
+        for i in range(self.from_account_combo.count()):
+            account_text = self.from_account_combo.itemText(i)
+            if account_text.startswith(from_account):
+                self.from_account_combo.setCurrentIndex(i)
+                break
+        
+        for i in range(self.to_account_combo.count()):
+            account_text = self.to_account_combo.itemText(i)
+            if account_text.startswith(to_account):
+                self.to_account_combo.setCurrentIndex(i)
+                break
+    
+    def get_data(self):
+        """获取转账数据（包含ID）"""
+        data = super().get_data()
+        data['id'] = self.transfer_data[0] if self.transfer_data else None
+        return data
 
 
 class BudgetManagementDialog(QDialog):
@@ -419,133 +372,35 @@ class BudgetManagementDialog(QDialog):
         self.load_budgets()
 
 
-class AddBudgetDialog(QDialog):
+class AddBudgetDialog(BaseBudgetDialog):
     """添加预算对话框"""
     
     def __init__(self, categories, parent=None):
-        super().__init__(parent)
-        self.categories = categories
+        super().__init__(categories, parent)
         self.setWindowTitle("添加预算")
-        self.setModal(True)
         self.setFixedSize(400, 350)
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QVBoxLayout()
-        form_layout = QFormLayout()
-        
-        # 类别选择
-        self.category_combo = QComboBox()
-        self.category_combo.addItems(self.categories)
-        category_label = QLabel("支出类别:")
-        StyleHelper.apply_label_style(category_label)
-        form_layout.addRow(category_label, self.category_combo)
-        
-        # 预算类型
-        self.budget_type_combo = QComboBox()
-        self.budget_type_combo.addItems(["月度预算", "年度预算"])
-        self.budget_type_combo.currentTextChanged.connect(self.on_budget_type_changed)
-        budget_type_label = QLabel("预算类型:")
-        StyleHelper.apply_label_style(budget_type_label)
-        form_layout.addRow(budget_type_label, self.budget_type_combo)
-        
-        # 预算金额
-        self.amount_spin = QDoubleSpinBox()
-        self.amount_spin.setRange(0, 999999.99)
-        self.amount_spin.setDecimals(2)
-        self.amount_spin.setPrefix("¥")
-        self.amount_spin.setSuffix("元")
-        amount_label = QLabel("预算金额:")
-        StyleHelper.apply_label_style(amount_label)
-        form_layout.addRow(amount_label, self.amount_spin)
-        
-        # 预警阈值
-        self.threshold_spin = QDoubleSpinBox()
-        self.threshold_spin.setRange(0, 100)
-        self.threshold_spin.setDecimals(0)
-        self.threshold_spin.setSuffix("%")
-        self.threshold_spin.setValue(80)
-        threshold_label = QLabel("预警阈值:")
-        StyleHelper.apply_label_style(threshold_label)
-        form_layout.addRow(threshold_label, self.threshold_spin)
-        
-        # 生效日期
-        self.start_date_edit = QDateEdit()
-        self.start_date_edit.setDate(QDate.currentDate())
-        self.start_date_edit.setCalendarPopup(True)
-        start_date_label = QLabel("生效日期:")
-        StyleHelper.apply_label_style(start_date_label)
-        form_layout.addRow(start_date_label, self.start_date_edit)
-        
-        # 结束日期（可选）
-        self.end_date_edit = QDateEdit()
-        self.end_date_edit.setDate(QDate.currentDate().addYears(1))
-        self.end_date_edit.setCalendarPopup(True)
-        self.end_date_check = QCheckBox("设置结束日期")
-        self.end_date_check.toggled.connect(self.end_date_edit.setEnabled)
-        self.end_date_edit.setEnabled(False)
-        end_date_label = QLabel("结束日期:")
-        StyleHelper.apply_label_style(end_date_label)
-        form_layout.addRow(end_date_label, self.end_date_check)
-        form_layout.addRow("", self.end_date_edit)
-        
-        layout.addLayout(form_layout)
-        
-        # 按钮区域
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        ok_btn = QPushButton("确定")
-        ok_btn.clicked.connect(self.accept)
-        StyleHelper.apply_button_style(ok_btn)
-        button_layout.addWidget(ok_btn)
-        
-        cancel_btn = QPushButton("取消")
-        cancel_btn.clicked.connect(self.reject)
-        StyleHelper.apply_button_style(cancel_btn)
-        button_layout.addWidget(cancel_btn)
-        
-        layout.addLayout(button_layout)
+        layout = self.setup_budget_form()
         self.setLayout(layout)
-        
-        # 初始化日期
-        self.on_budget_type_changed()
-    
-    def on_budget_type_changed(self):
-        """预算类型改变时的处理"""
-        budget_type = self.budget_type_combo.currentText()
-        current_date = QDate.currentDate()
-        
-        if "月度" in budget_type:
-            self.start_date_edit.setDate(QDate(current_date.year(), current_date.month(), 1))
-        else:  # 年度
-            self.start_date_edit.setDate(QDate(current_date.year(), 1, 1))
-    
-    def get_data(self):
-        """获取对话框数据"""
-        budget_type = 'monthly' if self.budget_type_combo.currentText() == "月度预算" else 'yearly'
-        
-        return {
-            'category': self.category_combo.currentText(),
-            'budget_type': budget_type,
-            'amount': self.amount_spin.value(),
-            'warning_threshold': self.threshold_spin.value(),
-            'start_date': self.start_date_edit.date().toString("yyyy-MM-dd"),
-            'end_date': self.end_date_edit.date().toString("yyyy-MM-dd") if self.end_date_check.isChecked() else None
-        }
 
 
-class EditBudgetDialog(AddBudgetDialog):
+class EditBudgetDialog(BaseBudgetDialog):
     """编辑预算对话框"""
     
     def __init__(self, budget_data, categories, parent=None):
         self.budget_data = budget_data
         super().__init__(categories, parent)
         self.setWindowTitle("编辑预算")
+        self.setFixedSize(400, 350)
+        self.setup_ui()
         self.load_budget_data()
     
     def load_budget_data(self):
         """加载预算数据"""
+        from PyQt6.QtCore import QDate
+        
         self.category_combo.setCurrentText(self.budget_data['category'])
         budget_type_text = "月度预算" if self.budget_data['budget_type'] == 'monthly' else "年度预算"
         self.budget_type_combo.setCurrentText(budget_type_text)
@@ -559,44 +414,11 @@ class EditBudgetDialog(AddBudgetDialog):
             self.end_date_check.setChecked(True)
             self.end_date_edit.setDate(QDate.fromString(self.budget_data['end_date'], "yyyy-MM-dd"))
     
-    def setup_ui(self):
-        layout = QVBoxLayout()
-        form_layout = QFormLayout()
-        
-        # 转账日期
-        self.date_edit = QDateTimeEdit()
-        self.date_edit.setDisplayFormat("yyyy-MM-dd")
-        
-        # 转出账户
-        self.from_account_combo = QComboBox()
-        
-        # 转入账户
-        self.to_account_combo = QComboBox()
-        
-        # 转账金额
-        self.amount_spin = QDoubleSpinBox()
-        self.amount_spin.setRange(0, 999999.99)
-        self.amount_spin.setDecimals(2)
-        self.amount_spin.setPrefix("¥")
-        
-        # 备注
-        self.description_edit = QLineEdit()
-        
-        transfer_date_label = QLabel("转账日期:")
-        StyleHelper.apply_label_style(transfer_date_label)
-        form_layout.addRow(transfer_date_label, self.date_edit)
-        
-        from_account_label = QLabel("转出账户:")
-        StyleHelper.apply_label_style(from_account_label)
-        form_layout.addRow(from_account_label, self.from_account_combo)
-        
-        to_account_label = QLabel("转入账户:")
-        StyleHelper.apply_label_style(to_account_label)
-        form_layout.addRow(to_account_label, self.to_account_combo)
-        
-        transfer_amount_label = QLabel("转账金额:")
-        StyleHelper.apply_label_style(transfer_amount_label)
-        form_layout.addRow(transfer_amount_label, self.amount_spin)
+    def get_data(self):
+        """获取预算数据（包含ID）"""
+        data = super().get_data()
+        data['id'] = self.budget_data['id'] if self.budget_data else None
+        return data
         
         transfer_note_label = QLabel("备注:")
         StyleHelper.apply_label_style(transfer_note_label)
