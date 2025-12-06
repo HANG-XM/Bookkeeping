@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                             QDoubleSpinBox, QMessageBox, QSplitter, QGroupBox,
                             QTreeWidget, QTreeWidgetItem, QHeaderView, QSpinBox,
                             QCalendarWidget, QDateEdit, QScrollArea, QGridLayout,
-                            QFrame, QButtonGroup, QRadioButton)
+                            QFrame, QButtonGroup, QRadioButton, QColorDialog)
 from PyQt6.QtCore import Qt, QDateTime, QDate, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt6.QtGui import QFont, QIcon, QPalette, QColor
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -317,11 +317,23 @@ class ThemeSelectionDialog(BaseDialog):
         StyleHelper.apply_label_style(title_label)
         layout.addWidget(title_label)
         
+        # 工具栏
+        toolbar_layout = QHBoxLayout()
+        
+        create_theme_btn = QPushButton("创建自定义主题")
+        create_theme_btn.clicked.connect(self.create_custom_theme)
+        StyleHelper.apply_button_style(create_theme_btn)
+        toolbar_layout.addWidget(create_theme_btn)
+        
+        toolbar_layout.addStretch()
+        
+        layout.addLayout(toolbar_layout)
+        
         # 主题卡片区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_content = QWidget()
-        card_layout = QGridLayout()
+        self.card_layout = QGridLayout()
         
         self.theme_buttons = QButtonGroup()
         self.theme_cards = {}
@@ -329,14 +341,14 @@ class ThemeSelectionDialog(BaseDialog):
         row, col = 0, 0
         for theme_id, theme_data in theme_manager.THEMES.items():
             card = self.create_theme_card(theme_id, theme_data)
-            card_layout.addWidget(card, row, col)
+            self.card_layout.addWidget(card, row, col)
             
             col += 1
             if col >= 2:  # 每行2个卡片
                 col = 0
                 row += 1
         
-        scroll_content.setLayout(card_layout)
+        scroll_content.setLayout(self.card_layout)
         scroll_area.setWidget(scroll_content)
         layout.addWidget(scroll_area)
         
@@ -376,6 +388,9 @@ class ThemeSelectionDialog(BaseDialog):
                 margin: 5px;
             }}
         """)
+        
+        # 检查是否为自定义主题
+        is_custom = theme_id.startswith('custom_')
         
         layout = QVBoxLayout()
         
@@ -485,6 +500,26 @@ class ThemeSelectionDialog(BaseDialog):
         # 将单选按钮和卡片组合
         card_layout = QHBoxLayout()
         card_layout.addLayout(layout)
+        
+        # 如果是自定义主题，添加删除按钮
+        if is_custom:
+            delete_btn = QPushButton("删除")
+            delete_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {theme_data['colors']['danger']};
+                    color: white;
+                    border: none;
+                    border-radius: 3px;
+                    padding: 4px 8px;
+                    font-size: 10px;
+                }}
+                QPushButton:hover {{
+                    background-color: #d32f2f;
+                }}
+            """)
+            delete_btn.clicked.connect(lambda _, tid=theme_id: self.delete_custom_theme(tid))
+            card_layout.addWidget(delete_btn)
+        
         card_layout.addWidget(radio)
         
         card.setLayout(card_layout)
@@ -505,6 +540,54 @@ class ThemeSelectionDialog(BaseDialog):
                 radio.setChecked(True)
                 break
     
+    def create_custom_theme(self):
+        """创建自定义主题"""
+        dialog = CustomThemeDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 重新加载主题列表
+            self.refresh_theme_list()
+    
+    def delete_custom_theme(self, theme_id):
+        """删除自定义主题"""
+        theme_name = theme_manager.THEMES[theme_id].get('name', theme_id)
+        reply = QMessageBox.question(
+            self, "确认删除", 
+            f"确定要删除自定义主题 '{theme_name}' 吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            if theme_manager.delete_custom_theme(theme_id):
+                MessageHelper.show_info(self, "成功", "主题已删除")
+                self.refresh_theme_list()
+            else:
+                MessageHelper.show_error(self, "错误", "删除主题失败")
+    
+    def refresh_theme_list(self):
+        """刷新主题列表"""
+        # 清除现有的主题卡片
+        for i in reversed(range(self.card_layout.count())):
+            child = self.card_layout.itemAt(i).widget()
+            if child:
+                child.setParent(None)
+        
+        # 重新创建主题卡片
+        self.theme_cards = {}
+        self.theme_buttons = QButtonGroup()
+        
+        row, col = 0, 0
+        for theme_id, theme_data in theme_manager.THEMES.items():
+            card = self.create_theme_card(theme_id, theme_data)
+            self.card_layout.addWidget(card, row, col)
+            
+            col += 1
+            if col >= 2:  # 每行2个卡片
+                col = 0
+                row += 1
+        
+        # 重新加载当前主题选择
+        self.load_current_theme()
+    
     def apply_theme(self):
         """应用选中的主题"""
         checked_radio = self.theme_buttons.checkedButton()
@@ -514,6 +597,306 @@ class ThemeSelectionDialog(BaseDialog):
                 self.accept()
             else:
                 MessageHelper.show_warning(self, "错误", "主题应用失败！")
+
+
+class CustomThemeDialog(BaseDialog):
+    """自定义主题创建对话框"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("自定义主题")
+        self.setFixedSize(900, 700)
+        self.color_inputs = {}
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # 标题
+        title_label = QLabel("创建自定义主题")
+        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        StyleHelper.apply_label_style(title_label)
+        layout.addWidget(title_label)
+        
+        # 主题名称输入
+        name_group = QGroupBox("主题信息")
+        name_layout = QFormLayout()
+        
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("请输入主题名称")
+        name_layout.addRow("主题名称:", self.name_input)
+        
+        self.desc_input = QTextEdit()
+        self.desc_input.setPlaceholderText("请输入主题描述")
+        self.desc_input.setMaximumHeight(60)
+        name_layout.addRow("主题描述:", self.desc_input)
+        
+        name_group.setLayout(name_layout)
+        layout.addWidget(name_group)
+        
+        # 颜色配置区域
+        color_group = QGroupBox("颜色配置")
+        color_layout = QVBoxLayout()
+        
+        # 创建颜色配置表格
+        self.color_table = QTableWidget()
+        self.color_table.setColumnCount(3)
+        self.color_table.setHorizontalHeaderLabels(["颜色名称", "颜色预览", "操作"])
+        self.color_table.horizontalHeader().setStretchLastSection(True)
+        
+        # 定义颜色配置项
+        self.color_configs = [
+            ("background", "背景色", "#FFFFFF"),
+            ("secondary_background", "次要背景色", "#F5F5F5"),
+            ("card_background", "卡片背景色", "#FFFFFF"),
+            ("primary_text", "主要文字色", "#333333"),
+            ("secondary_text", "次要文字色", "#666666"),
+            ("accent", "主题色", "#2196F3"),
+            ("success", "成功色", "#4CAF50"),
+            ("warning", "警告色", "#FF9800"),
+            ("danger", "危险色", "#F44336"),
+            ("border", "边框色", "#E0E0E0"),
+            ("hover", "悬停色", "#F0F0F0"),
+            ("income", "收入色", "#4CAF50"),
+            ("expense", "支出色", "#FF6B6B")
+        ]
+        
+        self.color_table.setRowCount(len(self.color_configs))
+        
+        for row, (color_key, color_name, default_color) in enumerate(self.color_configs):
+            # 颜色名称
+            name_item = QTableWidgetItem(color_name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.color_table.setItem(row, 0, name_item)
+            
+            # 颜色预览
+            color_label = QLabel()
+            color_label.setFixedSize(80, 25)
+            color_label.setStyleSheet(f"background-color: {default_color}; border: 1px solid #ccc;")
+            self.color_table.setCellWidget(row, 1, color_label)
+            
+            # 选择颜色按钮
+            color_btn = QPushButton("选择颜色")
+            color_btn.clicked.connect(lambda _, r=row, c=color_key: self.choose_color(r, c))
+            color_btn.setFixedSize(100, 25)
+            self.color_table.setCellWidget(row, 2, color_btn)
+            
+            # 保存颜色值和控件引用
+            self.color_inputs[color_key] = {
+                'label': color_label,
+                'button': color_btn,
+                'value': default_color
+            }
+        
+        # 设置表格行高
+        self.color_table.verticalHeader().setDefaultSectionSize(30)
+        
+        color_layout.addWidget(self.color_table)
+        color_group.setLayout(color_layout)
+        layout.addWidget(color_group)
+        
+        # 预览区域
+        preview_group = QGroupBox("预览效果")
+        preview_layout = QVBoxLayout()
+        preview_content = self.create_preview_widget()
+        preview_layout.addWidget(preview_content)
+        preview_group.setLayout(preview_layout)
+        layout.addWidget(preview_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        
+        # 预设主题按钮
+        preset_layout = QHBoxLayout()
+        preset_label = QLabel("快速应用预设:")
+        preset_layout.addWidget(preset_label)
+        
+        presets = [
+            ("日间风格", {
+                "background": "#FFFFFF", "secondary_background": "#F5F5F5", "card_background": "#FFFFFF",
+                "primary_text": "#333333", "secondary_text": "#666666", "accent": "#2196F3",
+                "success": "#4CAF50", "warning": "#FF9800", "danger": "#F44336", "border": "#E0E0E0",
+                "hover": "#F0F0F0", "income": "#4CAF50", "expense": "#FF6B6B"
+            }),
+            ("暗夜风格", {
+                "background": "#1E1E1E", "secondary_background": "#2D2D2D", "card_background": "#252526",
+                "primary_text": "#FFFFFF", "secondary_text": "#B0B0B0", "accent": "#64B5F6",
+                "success": "#81C784", "warning": "#FFB74D", "danger": "#E57373", "border": "#404040",
+                "hover": "#333333", "income": "#81C784", "expense": "#E57373"
+            }),
+            ("护眼风格", {
+                "background": "#F4F1E8", "secondary_background": "#E8E4D8", "card_background": "#FAF8F3",
+                "primary_text": "#3D3D3D", "secondary_text": "#666666", "accent": "#8D6E63",
+                "success": "#689F38", "warning": "#FFA726", "danger": "#EF5350", "border": "#D7CCC8",
+                "hover": "#EFEBE9", "income": "#689F38", "expense": "#EF5350"
+            }),
+            ("科技风格", {
+                "background": "#0F0F23", "secondary_background": "#1A1A2E", "card_background": "#16213E",
+                "primary_text": "#E8E8E8", "secondary_text": "#B8B8B8", "accent": "#00FF88",
+                "success": "#00C851", "warning": "#FFB300", "danger": "#FF4444", "border": "#2C3E50",
+                "hover": "#1E3A5F", "income": "#00C851", "expense": "#FF4444"
+            })
+        ]
+        
+        for preset_name, preset_colors in presets:
+            btn = QPushButton(preset_name)
+            btn.clicked.connect(lambda _, colors=preset_colors: self.apply_preset(colors))
+            btn.setMaximumWidth(80)
+            preset_layout.addWidget(btn)
+        
+        preset_layout.addStretch()
+        layout.addLayout(preset_layout)
+        
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(self.reject)
+        StyleHelper.apply_button_style(cancel_btn)
+        button_layout.addWidget(cancel_btn)
+        
+        save_btn = QPushButton("保存主题")
+        save_btn.clicked.connect(self.save_custom_theme)
+        StyleHelper.apply_button_style(save_btn)
+        button_layout.addWidget(save_btn)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+    
+    def choose_color(self, row, color_key):
+        """选择颜色"""
+        current_color = self.color_inputs[color_key]['value']
+        color = QColorDialog.getColor(QColor(current_color), self, f"选择{self.color_configs[row][1]}")
+        if color.isValid():
+            hex_color = color.name()
+            self.update_color(color_key, hex_color)
+    
+    def update_color(self, color_key, hex_color):
+        """更新颜色"""
+        if color_key in self.color_inputs:
+            self.color_inputs[color_key]['value'] = hex_color
+            self.color_inputs[color_key]['label'].setStyleSheet(
+                f"background-color: {hex_color}; border: 1px solid #ccc;"
+            )
+            # 更新预览
+            self.update_preview()
+    
+    def apply_preset(self, preset_colors):
+        """应用预设颜色"""
+        for color_key, hex_color in preset_colors.items():
+            self.update_color(color_key, hex_color)
+    
+    def create_preview_widget(self):
+        """创建预览控件"""
+        self.preview_widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # 预览标题
+        title = QLabel("主题预览")
+        title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        layout.addWidget(title)
+        
+        # 预览内容
+        preview_content = QWidget()
+        preview_layout = QVBoxLayout()
+        
+        # 示例文本
+        self.preview_text = QLabel("这是一段示例文本，用于预览主题效果")
+        self.preview_text.setWordWrap(True)
+        preview_layout.addWidget(self.preview_text)
+        
+        # 示例按钮
+        button_layout = QHBoxLayout()
+        self.preview_income_btn = QPushButton("收入按钮")
+        self.preview_expense_btn = QPushButton("支出按钮")
+        self.preview_normal_btn = QPushButton("普通按钮")
+        
+        button_layout.addWidget(self.preview_income_btn)
+        button_layout.addWidget(self.preview_expense_btn)
+        button_layout.addWidget(self.preview_normal_btn)
+        preview_layout.addLayout(button_layout)
+        
+        preview_content.setLayout(preview_layout)
+        layout.addWidget(preview_content)
+        
+        self.preview_widget.setLayout(layout)
+        self.update_preview()
+        
+        return self.preview_widget
+    
+    def update_preview(self):
+        """更新预览效果"""
+        colors = {k: v['value'] for k, v in self.color_inputs.items()}
+        
+        # 应用预览样式
+        self.preview_widget.setStyleSheet(f"""
+            QWidget {{
+                background-color: {colors['background']};
+                color: {colors['primary_text']};
+            }}
+            QLabel {{
+                color: {colors['primary_text']};
+            }}
+            QPushButton {{
+                padding: 6px 12px;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }}
+        """)
+        
+        self.preview_income_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {colors['income']};
+                color: white;
+            }}
+        """)
+        
+        self.preview_expense_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {colors['expense']};
+                color: white;
+            }}
+        """)
+        
+        self.preview_normal_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {colors['accent']};
+                color: white;
+            }}
+        """)
+    
+    def save_custom_theme(self):
+        """保存自定义主题"""
+        name = self.name_input.text().strip()
+        if not name:
+            MessageHelper.show_warning(self, "提示", "请输入主题名称！")
+            return
+        
+        # 检查名称是否重复
+        for theme_id, theme_data in theme_manager.THEMES.items():
+            if theme_data.get('name') == name:
+                MessageHelper.show_warning(self, "提示", "主题名称已存在！")
+                return
+        
+        # 构建主题数据
+        colors = {k: v['value'] for k, v in self.color_inputs.items()}
+        description = self.desc_input.toPlainText().strip() or f"用户自定义主题：{name}"
+        
+        # 生成主题ID
+        theme_id = f"custom_{name}_{hash(name)}"
+        
+        theme_data = {
+            "name": name,
+            "description": description,
+            "colors": colors
+        }
+        
+        # 保存主题
+        theme_manager.add_custom_theme(theme_id, theme_data)
+        
+        MessageHelper.show_info(self, "成功", f"主题 '{name}' 已成功保存！")
+        self.accept()
 
 
 class CategoryButton(QPushButton):
